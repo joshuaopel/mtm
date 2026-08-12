@@ -1,0 +1,103 @@
+import { isTrack, isVehicle, type MTMTrack, type MTMVehicle } from './formats';
+import { TRACKS } from '../data/tracks';
+import { VEHICLES } from '../data/vehicles';
+
+/**
+ * Loads custom content exported from the Blender add-on.
+ *
+ * Drop `.mtmtrack.json` / `.mtmvehicle.json` files into `public/content/` and
+ * list them in `public/content/manifest.json`; they appear in the select
+ * screens alongside the built-in roster. This is what makes the Blender tools
+ * a real pipeline rather than an export that goes nowhere.
+ *
+ * Loading is entirely best-effort: a missing manifest is the normal case, and
+ * one malformed file must never stop the game from starting.
+ */
+
+export interface ContentManifest {
+  tracks?: string[];
+  vehicles?: string[];
+}
+
+export interface LoadedContent {
+  tracks: MTMTrack[];
+  vehicles: MTMVehicle[];
+  /** Human-readable problems, surfaced in the console for content authors. */
+  warnings: string[];
+}
+
+const MANIFEST_URL = 'content/manifest.json';
+
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url, { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+
+/** Resolve a manifest entry against the content directory. */
+function resolve(entry: string): string {
+  if (entry.startsWith('http://') || entry.startsWith('https://') || entry.startsWith('/')) {
+    return entry;
+  }
+  return `content/${entry}`;
+}
+
+export async function loadContent(): Promise<LoadedContent> {
+  const tracks = [...TRACKS];
+  const vehicles = [...VEHICLES];
+  const warnings: string[] = [];
+
+  let manifest: ContentManifest;
+  try {
+    manifest = (await fetchJson(MANIFEST_URL)) as ContentManifest;
+  } catch {
+    // No manifest is the default state, not an error worth reporting.
+    return { tracks, vehicles, warnings };
+  }
+
+  const trackFiles = manifest.tracks ?? [];
+  const vehicleFiles = manifest.vehicles ?? [];
+
+  // Load everything in parallel; a slow or broken entry shouldn't hold up
+  // the rest of the content.
+  const [trackResults, vehicleResults] = await Promise.all([
+    Promise.allSettled(trackFiles.map((file) => fetchJson(resolve(file)))),
+    Promise.allSettled(vehicleFiles.map((file) => fetchJson(resolve(file)))),
+  ]);
+
+  trackResults.forEach((result, index) => {
+    const file = trackFiles[index];
+    if (result.status === 'rejected') {
+      warnings.push(`Could not load track "${file}": ${result.reason}`);
+      return;
+    }
+    const value = result.value;
+    if (!isTrack(value)) {
+      warnings.push(`"${file}" is not a valid mtm-track file; skipped.`);
+      return;
+    }
+    // A custom track replaces a built-in with the same id, so authors can
+    // iterate on a stock course without renaming it.
+    const existing = tracks.findIndex((t) => t.id === value.id);
+    if (existing >= 0) tracks[existing] = value;
+    else tracks.push(value);
+  });
+
+  vehicleResults.forEach((result, index) => {
+    const file = vehicleFiles[index];
+    if (result.status === 'rejected') {
+      warnings.push(`Could not load vehicle "${file}": ${result.reason}`);
+      return;
+    }
+    const value = result.value;
+    if (!isVehicle(value)) {
+      warnings.push(`"${file}" is not a valid mtm-vehicle file; skipped.`);
+      return;
+    }
+    const existing = vehicles.findIndex((v) => v.id === value.id);
+    if (existing >= 0) vehicles[existing] = value;
+    else vehicles.push(value);
+  });
+
+  return { tracks, vehicles, warnings };
+}

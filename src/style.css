@@ -1,0 +1,489 @@
+/* ==========================================================================
+   Monster Truck Madness - retro 1996 shell UI
+   Deliberately chunky: beveled panels, VGA palette, no smooth anything.
+   ========================================================================== */
+
+:root {
+  --steel: #8a8a7a;
+  --steel-lt: #c8c8b4;
+  --steel-dk: #4a4a40;
+  --steel-shadow: #24241e;
+  --panel: #6e6e5e;
+  --mud: #6b4a26;
+  --mud-dk: #3a2713;
+  --amber: #ffb020;
+  --amber-dk: #a86800;
+  --rust: #b8400c;
+  --ink: #14140f;
+  --paper: #e8e4d0;
+  --go: #58c020;
+  --warn: #e02020;
+  --ui-scale: 1;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--paper);
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  cursor: default;
+  user-select: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  background: #000;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#ui > * {
+  pointer-events: auto;
+}
+
+/* --- shared chrome ------------------------------------------------------ */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  font-size: calc(15px * var(--ui-scale));
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.screen.dim {
+  background: rgba(10, 8, 4, 0.55);
+}
+
+.bevel {
+  background: var(--panel);
+  border: 2px solid var(--steel-dk);
+  box-shadow:
+    inset 2px 2px 0 var(--steel-lt),
+    inset -2px -2px 0 var(--steel-dk),
+    4px 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.bevel-in {
+  background: var(--steel-dk);
+  box-shadow:
+    inset 2px 2px 0 var(--steel-shadow),
+    inset -2px -2px 0 var(--steel-lt);
+}
+
+.title-plate {
+  padding: 10px 26px 12px;
+  background: linear-gradient(180deg, #2a2a22 0%, #14140f 100%);
+  border: 3px solid var(--amber-dk);
+  box-shadow: 0 0 0 3px #14140f, 6px 6px 0 rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.title-plate h1 {
+  margin: 0;
+  font-size: calc(46px * var(--ui-scale));
+  line-height: 0.94;
+  font-weight: 900;
+  color: var(--amber);
+  letter-spacing: 4px;
+  text-shadow:
+    3px 3px 0 var(--rust),
+    5px 5px 0 #000;
+}
+
+.title-plate .sub {
+  margin-top: 6px;
+  font-size: calc(13px * var(--ui-scale));
+  color: var(--steel-lt);
+  letter-spacing: 6px;
+}
+
+.hint {
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--steel-lt);
+  letter-spacing: 2px;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.hint b {
+  color: var(--amber);
+}
+
+/* --- menus -------------------------------------------------------------- */
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 320px;
+  padding: 6px;
+}
+
+.menu-item {
+  padding: 9px 14px;
+  color: var(--paper);
+  text-shadow: 1px 1px 0 #000;
+  cursor: pointer;
+  border: 2px solid transparent;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  overflow: hidden;
+}
+
+.menu-item .tag {
+  color: var(--steel-lt);
+  font-size: calc(11px * var(--ui-scale));
+  /* Difficulty stars and class labels must never be cut off mid-run. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.menu-item > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item.sel {
+  background: var(--amber-dk);
+  border-color: var(--amber);
+  color: #fff;
+}
+
+.menu-item.sel .tag {
+  color: #ffe6b0;
+}
+
+.menu-item.disabled {
+  color: var(--steel);
+  cursor: not-allowed;
+}
+
+/* --- select screens ----------------------------------------------------- */
+
+.select-root {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  padding: 18px;
+  text-transform: uppercase;
+  font-size: calc(14px * var(--ui-scale));
+  letter-spacing: 1px;
+}
+
+.bar {
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(180deg, #2a2a22, #14140f);
+  border: 2px solid var(--steel-dk);
+  color: var(--amber);
+  font-weight: bold;
+  letter-spacing: 3px;
+}
+
+.bar .right {
+  color: var(--steel-lt);
+  font-weight: normal;
+  letter-spacing: 1px;
+  font-size: calc(12px * var(--ui-scale));
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(260px, 350px) 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+
+.list-pane {
+  padding: 6px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.detail-pane {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+/*
+ * Vehicle select renders the live turntable behind this pane, so the panel
+ * is translucent and its content is held to the left half — otherwise the
+ * truck you are choosing is completely hidden behind its own stat sheet.
+ */
+.detail-pane.showroom {
+  background: rgba(46, 46, 38, 0.62);
+  box-shadow:
+    inset 2px 2px 0 rgba(200, 200, 180, 0.35),
+    inset -2px -2px 0 rgba(36, 36, 30, 0.6);
+}
+
+.detail-pane.showroom > * {
+  max-width: 60%;
+}
+
+@media (max-width: 900px) {
+  .detail-pane.showroom {
+    background: rgba(46, 46, 38, 0.85);
+  }
+  .detail-pane.showroom > * {
+    max-width: 100%;
+  }
+}
+
+.detail-pane h2 {
+  margin: 0;
+  font-size: calc(26px * var(--ui-scale));
+  color: var(--amber);
+  letter-spacing: 3px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.detail-pane .blurb {
+  color: var(--paper);
+  line-height: 1.5;
+  font-size: calc(12px * var(--ui-scale));
+  text-transform: none;
+  letter-spacing: 0;
+  max-width: 60ch;
+}
+
+.thumb {
+  width: 100%;
+  height: clamp(140px, 26vh, 260px);
+  image-rendering: pixelated;
+  display: block;
+}
+
+/* stat bars */
+
+.stats {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 260px) auto;
+  gap: 5px 10px;
+  align-items: center;
+  font-size: calc(12px * var(--ui-scale));
+  justify-content: start;
+}
+
+.stats .label {
+  color: var(--steel-lt);
+  letter-spacing: 2px;
+}
+
+.stats .val {
+  color: var(--amber);
+  min-width: 3ch;
+  text-align: right;
+}
+
+.meter {
+  height: 12px;
+  padding: 2px;
+  display: flex;
+  gap: 2px;
+}
+
+.meter i {
+  flex: 1;
+  background: var(--steel-shadow);
+}
+
+.meter i.on {
+  background: var(--amber);
+}
+
+.meter i.on.hi {
+  background: var(--go);
+}
+
+/* --- HUD ---------------------------------------------------------------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: calc(14px * var(--ui-scale));
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.hud .box {
+  position: absolute;
+  padding: 6px 10px;
+  background: rgba(20, 20, 15, 0.72);
+  border: 2px solid var(--steel-dk);
+  box-shadow: inset 1px 1px 0 var(--steel), 2px 2px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: 1px 1px 0 #000;
+  line-height: 1.35;
+}
+
+.hud .tl { top: 12px; left: 12px; }
+.hud .tr { top: 12px; right: 12px; text-align: right; }
+.hud .bl { bottom: 12px; left: 12px; }
+.hud .br { bottom: 12px; right: 12px; text-align: right; }
+
+.hud .big {
+  font-size: calc(30px * var(--ui-scale));
+  font-weight: bold;
+  color: var(--amber);
+  line-height: 1;
+}
+
+.hud .lbl {
+  font-size: calc(10px * var(--ui-scale));
+  color: var(--steel-lt);
+  letter-spacing: 3px;
+}
+
+.hud .speedo .big {
+  font-size: calc(44px * var(--ui-scale));
+  color: #fff;
+}
+
+.hud .unit {
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--steel-lt);
+}
+
+.center-msg {
+  position: absolute;
+  top: 34%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: calc(72px * var(--ui-scale));
+  font-weight: 900;
+  color: var(--amber);
+  letter-spacing: 8px;
+  text-shadow: 4px 4px 0 var(--rust), 7px 7px 0 #000;
+  pointer-events: none;
+}
+
+.center-msg.go { color: var(--go); text-shadow: 4px 4px 0 #1e5c00, 7px 7px 0 #000; }
+.center-msg.small { font-size: calc(34px * var(--ui-scale)); letter-spacing: 5px; }
+
+.wrongway {
+  position: absolute;
+  top: 58%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: calc(26px * var(--ui-scale));
+  color: var(--warn);
+  font-weight: bold;
+  letter-spacing: 4px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+/* standings list in HUD + results */
+
+.standings {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 10px;
+  font-size: calc(12px * var(--ui-scale));
+}
+
+.standings .me {
+  color: var(--amber);
+  font-weight: bold;
+}
+
+.results-table {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 6px 18px;
+  padding: 14px 20px;
+  font-size: calc(14px * var(--ui-scale));
+  min-width: min(560px, 90vw);
+}
+
+.results-table .head {
+  color: var(--steel-lt);
+  font-size: calc(11px * var(--ui-scale));
+  letter-spacing: 3px;
+  border-bottom: 2px solid var(--steel-dk);
+  padding-bottom: 4px;
+}
+
+.results-table .me {
+  color: var(--amber);
+  font-weight: bold;
+}
+
+/* --- loading ------------------------------------------------------------ */
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #14140f;
+  color: var(--amber);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  font-size: calc(16px * var(--ui-scale));
+}
+
+.loading .track {
+  width: min(420px, 70vw);
+  height: 18px;
+  padding: 3px;
+}
+
+.loading .fill {
+  height: 100%;
+  background: var(--amber);
+  width: 0%;
+  transition: width 0.12s linear;
+}
+
+@media (max-width: 720px) {
+  :root { --ui-scale: 0.85; }
+  .split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+}

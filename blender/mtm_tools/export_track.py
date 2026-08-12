@@ -1,0 +1,380 @@
+# SPDX-License-Identifier: MIT
+"""
+Track exporter: scene -> .mtmtrack.json
+
+Walks the scene, reads each object's MTM role, and writes the JSON the game
+loads. Validation happens before anything is written so a broken track fails
+with a message in the UI rather than producing a file that crashes the game
+on load.
+"""
+
+import json
+import os
+
+import bpy
+from bpy.types import Operator
+from mathutils import Vector
+
+from .convert import (
+    box_yaw_degrees,
+    convert_position,
+    local_bounds,
+    resample_polyline,
+    to_hex,
+    world_centre,
+    yaw_degrees,
+)
+
+FORMAT = "mtm-track"
+VERSION = 1
+
+
+def collect(scene, role):
+    """Every visible object in the scene playing a given role."""
+    return [obj for obj in scene.objects if getattr(obj, "mtm", None) and obj.mtm.role == role]
+
+
+def curve_points(depsgraph, obj):
+    """
+    Tessellated world-space points along a curve object, in spline order.
+
+    Evaluating through the depsgraph means modifiers and shape settings are
+    respected, so what you see in the viewport is what gets exported.
+    """
+    evaluated = obj.evaluated_get(depsgraph)
+    mesh = None
+    try:
+        mesh = evaluated.to_mesh()
+        if mesh is None or len(mesh.vertices) < 2:
+            return []
+        matrix = evaluated.matrix_world
+        return [matrix @ v.co.copy() for v in mesh.vertices]
+    finally:
+        if mesh is not None:
+            evaluated.to_mesh_clear()
+
+
+def build_road(scene, depsgraph, problems):
+    settings = scene.mtm_track
+    roads = collect(scene, "ROAD")
+
+    if not roads:
+        problems.append("No object has the 'Road Spline' role — a track needs exactly one.")
+        return None
+    if len(roads) > 1:
+        problems.append(
+            f"{len(roads)} objects have the 'Road Spline' role; there must be exactly one."
+        )
+        return None
+
+    road_object = roads[0]
+    if road_object.type != "CURVE":
+        problems.append(f"'{road_object.name}' is marked as the road but is not a curve object.")
+        return None
+
+    raw = curve_points(depsgraph, road_object)
+    if len(raw) < 3:
+        problems.append(f"Road curve '{road_object.name}' has too few points to build a track.")
+        return None
+
+    sampled = resample_polyline(raw, settings.road_spacing)
+    if len(sampled) < 3:
+        problems.append(
+            "Road resampled to fewer than 3 points — reduce 'Point Spacing' in the track settings."
+        )
+        return None
+
+    return {
+        "points": [{"pos": convert_position(p)} for p in sampled],
+        "width": round(settings.road_width, 3),
+        "closed": bool(settings.road_closed),
+        "shoulder": round(settings.road_shoulder, 3),
+    }
+
+
+def build_walls(scene):
+    walls = []
+    for obj in collect(scene, "WALL"):
+        size, _ = local_bounds(obj)
+        centre = world_centre(obj)
+        entry = {
+            "pos": convert_position(centre),
+            # Blender local Y is depth (game Z) and local Z is up (game Y).
+            "size": [round(size.x, 4), round(size.z, 4), round(size.y, 4)],
+            "rotation": box_yaw_degrees(obj.matrix_world),
+            "material": obj.mtm.wall_material,
+        }
+        if obj.mtm.wall_invisible:
+            entry["invisible"] = True
+        walls.append(entry)
+    return walls
+
+
+def build_props(scene):
+    props = []
+    for obj in collect(scene, "PROP"):
+        scale = obj.matrix_world.to_scale()
+        entry = {
+            "kind": obj.mtm.prop_kind,
+            "pos": convert_position(obj.matrix_world.translation),
+            "rotation": yaw_degrees(obj.matrix_world),
+            "scale": round(max(0.01, (abs(scale.x) + abs(scale.y) + abs(scale.z)) / 3.0), 4),
+        }
+        if obj.mtm.prop_solid:
+            entry["solid"] = True
+        props.append(entry)
+    return props
+
+
+def build_features(scene):
+    features = []
+    for obj in collect(scene, "FEATURE"):
+        position = obj.matrix_world.translation
+        scale = obj.matrix_world.to_scale()
+        # Radius comes from the object's own footprint, so features are sized
+        # by scaling them in the viewport.
+        radius = max(1.0, abs(scale.x) * 10.0)
+        kind = obj.mtm.feature_kind
+
+        entry = {
+            "type": kind,
+            "pos": [round(position.x, 3), round(-position.y, 3)],
+            "radius": round(radius, 3),
+        }
+        if kind == "crater":
+            entry["depth"] = round(abs(obj.mtm.feature_height), 3)
+        else:
+            entry["height"] = round(obj.mtm.feature_height, 3)
+        if kind == "plateau":
+            entry["falloff"] = round(obj.mtm.feature_falloff, 3)
+        features.append(entry)
+    return features
+
+
+def build_checkpoints(scene, problems):
+    gates = collect(scene, "CHECKPOINT")
+    if not gates:
+        # Perfectly valid: the game generates gates along the road instead.
+        return None
+
+    ordered = sorted(gates, key=lambda o: o.mtm.checkpoint_order)
+    seen = {}
+    for obj in ordered:
+        order = obj.mtm.checkpoint_order
+        if order in seen:
+            problems.append(
+                f"Checkpoints '{seen[order]}' and '{obj.name}' share order {order}; "
+                "each gate needs a unique order."
+            )
+        seen[order] = obj.name
+
+    if len(ordered) < 3:
+        problems.append(
+            f"Only {len(ordered)} checkpoints placed. Use at least 3, or delete them all "
+            "and let the game generate gates along the road."
+        )
+
+    return [
+        {
+            "pos": convert_position(obj.matrix_world.translation),
+            "rotation": yaw_degrees(obj.matrix_world),
+            "width": round(obj.mtm.checkpoint_width, 3),
+        }
+        for obj in ordered
+    ]
+
+
+def build_spawns(scene):
+    spawns = collect(scene, "SPAWN")
+    if not spawns:
+        return None
+    ordered = sorted(spawns, key=lambda o: o.mtm.spawn_order)
+    return [
+        {
+            "pos": convert_position(obj.matrix_world.translation),
+            "rotation": yaw_degrees(obj.matrix_world),
+        }
+        for obj in ordered
+    ]
+
+
+def terrain_size(scene, road):
+    """
+    Terrain extent: the bounds of a TERRAIN-role object if one exists,
+    otherwise sized to comfortably contain the road.
+    """
+    terrains = collect(scene, "TERRAIN")
+    if terrains:
+        size, _ = local_bounds(terrains[0])
+        return max(100.0, max(size.x, size.y))
+
+    if road:
+        extent = 0.0
+        for point in road["points"]:
+            extent = max(extent, abs(point["pos"][0]), abs(point["pos"][2]))
+        # Leave room for run-off and scenery beyond the outermost corner.
+        return max(200.0, (extent + 120.0) * 2.0)
+
+    return scene.mtm_track.terrain_size
+
+
+def build_track(context, problems):
+    scene = context.scene
+    settings = scene.mtm_track
+    depsgraph = context.evaluated_depsgraph_get()
+
+    road = build_road(scene, depsgraph, problems)
+    if road is None:
+        return None
+
+    track = {
+        "format": FORMAT,
+        "version": VERSION,
+        "id": settings.track_id.strip() or "untitled-track",
+        "name": settings.track_name.strip() or "UNTITLED",
+        "blurb": settings.blurb.strip(),
+        "difficulty": int(settings.difficulty),
+        "laps": int(settings.laps),
+        "environment": {
+            "skyZenith": to_hex(settings.sky_zenith),
+            "skyHorizon": to_hex(settings.sky_horizon),
+            "fogColor": to_hex(settings.fog_color),
+            "fogDensity": round(settings.fog_density, 5),
+            "sunDirection": [0.4, 0.7, 0.4],
+            "sunColor": to_hex(settings.sun_color),
+            "ambientColor": to_hex(settings.ambient_color),
+            "surface": settings.surface,
+        },
+        "terrain": {
+            "size": round(terrain_size(scene, road), 2),
+            "segments": int(settings.terrain_segments),
+            "amplitude": round(settings.terrain_amplitude, 3),
+            "frequency": round(settings.terrain_frequency, 5),
+            "seed": int(settings.terrain_seed),
+            "features": build_features(scene),
+        },
+        "road": road,
+        "walls": build_walls(scene),
+        "props": build_props(scene),
+    }
+
+    if settings.author.strip():
+        track["author"] = settings.author.strip()
+
+    # Take the sun direction from the first sun lamp if the scene has one.
+    sun = next((o for o in scene.objects if o.type == "LIGHT" and o.data.type == "SUN"), None)
+    if sun is not None:
+        direction = sun.matrix_world.to_3x3() @ Vector((0.0, 0.0, 1.0))
+        track["environment"]["sunDirection"] = [
+            round(direction.x, 3),
+            round(direction.z, 3),
+            round(-direction.y, 3),
+        ]
+
+    if settings.barriers_enabled:
+        track["barriers"] = {
+            "spacing": round(settings.barrier_spacing, 3),
+            "height": round(settings.barrier_height, 3),
+            "thickness": round(settings.barrier_thickness, 3),
+            "offset": round(settings.barrier_offset, 3),
+            "material": settings.barrier_material,
+            "invisible": bool(settings.barrier_invisible),
+        }
+
+    checkpoints = build_checkpoints(scene, problems)
+    if checkpoints:
+        track["checkpoints"] = checkpoints
+
+    spawns = build_spawns(scene)
+    if spawns:
+        track["spawns"] = spawns
+
+    return track
+
+
+class MTM_OT_export_track(Operator):
+    """Write the current scene out as a track the game can load"""
+
+    bl_idname = "mtm.export_track"
+    bl_label = "Export Track"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        problems = []
+        track = build_track(context, problems)
+
+        # Anything in `problems` is a hard error: writing a file the game
+        # cannot load is worse than refusing to write one.
+        if problems:
+            for problem in problems:
+                self.report({"ERROR"}, problem)
+            return {"CANCELLED"}
+
+        path = bpy.path.abspath(context.scene.mtm_track.export_path)
+        directory = os.path.dirname(path)
+        if directory and not os.path.isdir(directory):
+            os.makedirs(directory, exist_ok=True)
+
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(track, handle, indent=2)
+        except OSError as error:
+            self.report({"ERROR"}, f"Could not write {path}: {error}")
+            return {"CANCELLED"}
+
+        self.report(
+            {"INFO"},
+            "Exported {name}: {points} road points, {walls} walls, {props} props, "
+            "{features} terrain features -> {path}".format(
+                name=track["name"],
+                points=len(track["road"]["points"]),
+                walls=len(track["walls"]),
+                props=len(track["props"]),
+                features=len(track["terrain"]["features"]),
+                path=os.path.basename(path),
+            ),
+        )
+        return {"FINISHED"}
+
+
+class MTM_OT_validate_track(Operator):
+    """Check the scene for problems without writing a file"""
+
+    bl_idname = "mtm.validate_track"
+    bl_label = "Validate Track"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        problems = []
+        track = build_track(context, problems)
+
+        if problems:
+            for problem in problems:
+                self.report({"ERROR"}, problem)
+            return {"CANCELLED"}
+
+        scene = context.scene
+        # Warnings, not errors: each of these still exports, but is very
+        # likely a mistake worth surfacing before it reaches the game.
+        if not collect(scene, "SPAWN"):
+            self.report({"INFO"}, "No spawn points — the game will build a grid behind the line.")
+        if not track["walls"] and not track.get("barriers"):
+            self.report({"WARNING"}, "No walls and auto-barriers are off: nothing fences the course.")
+        if not track["blurb"]:
+            self.report({"WARNING"}, "No blurb set; the level select screen will look empty.")
+
+        self.report({"INFO"}, f"Track '{track['name']}' looks good.")
+        return {"FINISHED"}
+
+
+_CLASSES = (MTM_OT_export_track, MTM_OT_validate_track)
+
+
+def register():
+    for cls in _CLASSES:
+        bpy.utils.register_class(cls)
+
+
+def unregister():
+    for cls in reversed(_CLASSES):
+        bpy.utils.unregister_class(cls)

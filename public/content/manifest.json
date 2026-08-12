@@ -1,0 +1,5 @@
+{
+  "_comment": "Custom content exported from the Blender add-on. Add the filenames here and they appear in the select screens next to the built-in roster. Paths are relative to public/content/. Delete the entries below to hide the examples.",
+  "tracks": ["example-quarry-sprint.mtmtrack.json"],
+  "vehicles": ["example-scrap-king.mtmvehicle.json"]
+}
