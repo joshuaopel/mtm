@@ -5,12 +5,23 @@ This is a working document for deciding direction, not a commitment.
 
 ## What exists today
 
-**Content is data.** Tracks and vehicles are JSON validated against
-`src/game/formats.ts`. Drop files in `public/content/`, list them in
-`manifest.json`, and they appear in the select screens beside the built-ins.
-A custom file whose `id` matches a built-in replaces it, so a stock course can
-be iterated on without renaming. Bad files are skipped with a console warning
-rather than breaking the game.
+**Content is data, and drop-in.** Tracks and vehicles are JSON validated
+against `src/game/formats.ts`. Put a `*.mtmtrack.json` or `*.mtmvehicle.json`
+in `public/content/` and it is discovered by name — no manifest to maintain,
+though one is still honoured for oddly-named files. A custom file whose `id`
+matches a built-in replaces it, so a stock course can be iterated on without
+renaming. Bad files are skipped with a console warning rather than breaking
+the game.
+
+**The edit loop is live.** With the dev server running, saving a track,
+vehicle or model reloads it at once, rebuilding the race in progress. Model
+caches and the browser's HTTP cache are both invalidated, so an edited `.glb`
+really does come back changed.
+
+**Tracks can carry their own artwork.** Ground and road images override the
+procedural surfaces per track, and hand-modelled scenery arrives as a `.glb`
+with its textures. Both fall back to the procedural theme if a file is
+missing.
 
 **Blender is the level editor.** Tag objects with a role — road spline,
 collider, scenery, wall, prop, spawn, checkpoint, terrain feature — and the
@@ -58,20 +69,16 @@ These shape what tooling is worth building.
 
 ## What I'd build next, roughly in order of value
 
-### 1. In-game live reload
-Watch `public/content/` and rebuild the current track without restarting. The
-edit loop today is Blender → export → alt-tab → reselect the track → wait for
-the countdown. Cutting that to "export and see it" is worth more than any
-single new authoring feature, and it's a small change: the content loader
-already handles re-reading, and `RaceSession.dispose()` already tears down
-cleanly.
+### ~~1. In-game live reload~~ — done
+Editing anything in `public/content/` now rebuilds it immediately, including
+the race you are driving. Drop-in discovery landed alongside it: files are
+found by name, so there is no manifest to keep in step.
 
-### 2. A debug overlay
-Draw collision volumes, checkpoint gates, spawn points, the AI racing line
-and its lookahead target, over the live game. Most of the bugs found so far
-were diagnosed by writing one-off instrumentation; making that permanent and
-visual would have saved hours. Wireframe boxes from the same collider data
-the physics uses, toggled with a key.
+### ~~2. A debug overlay~~ — done
+F1 draws collision volumes, gates, spawns and the AI racing line, plus a
+tuning panel with the derived handling numbers and live suspension travel.
+The collision wireframes are built from the physics world rather than the
+source data, so a mismatch between art and collision is visible at a glance.
 
 ### 3. Ghost/replay recording
 Record the player's inputs and chassis transform per fixed step, and play it

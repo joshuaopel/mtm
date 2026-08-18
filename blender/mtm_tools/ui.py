@@ -9,6 +9,8 @@ work: create, shape, populate, validate, export.
 import bpy
 from bpy.types import Panel
 
+from .handling import damping_verdict, handling_numbers, wheelie_verdict
+
 
 class MTMPanel:
     bl_space_type = "VIEW_3D"
@@ -283,6 +285,60 @@ class MTM_PT_vehicle_physics(MTMPanel, Panel):
         box.prop(settings, "air_control")
 
 
+class MTM_PT_vehicle_response(MTMPanel, Panel):
+    bl_label = "Response"
+    bl_idname = "MTM_PT_vehicle_response"
+    bl_parent_id = "MTM_PT_vehicle"
+
+    def draw(self, context):
+        layout = self.layout
+        h = handling_numbers(context.scene.mtm_vehicle)
+
+        # These are all derived from the settings above. They are what
+        # actually determines how the truck feels, so they update live as you
+        # drag the sliders.
+        box = layout.box()
+        box.label(text="Suspension", icon="CON_SPLINEIK")
+        _readout(box, "Ride frequency", f"{h['ride_frequency']:.2f} Hz")
+        _readout(
+            box,
+            "Rebound",
+            f"{h['rebound_damping']:.2f} ({damping_verdict(h['rebound_damping'])})",
+        )
+        _readout(
+            box,
+            "Compression",
+            f"{h['compression_damping']:.2f} ({damping_verdict(h['compression_damping'])})",
+        )
+        _readout(box, "Resting squat", f"{h['rest_compression']:.2f} m")
+        _readout(box, "Bump headroom", f"{h['bump_headroom']:.2f} m")
+        if h["bump_headroom"] < 0.1:
+            box.label(text="Almost no travel left — it will bottom out", icon="ERROR")
+
+        box = layout.box()
+        box.label(text="Stance", icon="EMPTY_ARROWS")
+        _readout(box, "Ride height", f"{h['ride_height']:.2f} m")
+
+        box = layout.box()
+        box.label(text="Drive", icon="AUTO")
+        _readout(box, "Launch", f"{h['launch_acceleration']:.1f} m/s2")
+        _readout(box, "Drive force", f"{h['drive_force'] / 1000:.1f} kN")
+        _readout(box, "Front lifts at", f"{h['front_lift_threshold'] / 1000:.1f} kN")
+        _readout(
+            box,
+            "Wheelie",
+            f"{h['wheelie_margin'] * 100:.0f}% ({wheelie_verdict(h['wheelie_margin'])})",
+        )
+        if h["wheelie_margin"] >= 1.0:
+            box.label(text="Drive exceeds the lift threshold — it will loop", icon="ERROR")
+
+
+def _readout(layout, label, value):
+    row = layout.row()
+    row.label(text=label)
+    row.label(text=value)
+
+
 class MTM_PT_vehicle_look(MTMPanel, Panel):
     bl_label = "Look"
     bl_idname = "MTM_PT_vehicle_look"
@@ -364,6 +420,7 @@ _CLASSES = (
     MTM_PT_vehicle,
     MTM_PT_vehicle_stats,
     MTM_PT_vehicle_physics,
+    MTM_PT_vehicle_response,
     MTM_PT_vehicle_look,
     MTM_PT_vehicle_model,
     MTM_PT_vehicle_export,

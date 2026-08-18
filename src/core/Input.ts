@@ -16,6 +16,7 @@ export type Action =
   | 'camera'
   | 'lookBack'
   | 'mirror'
+  | 'debug'
   | 'pause'
   | 'confirm'
   | 'back'
@@ -36,6 +37,8 @@ const KEY_MAP: Record<string, Action[]> = {
   KeyC: ['camera'],
   KeyB: ['lookBack'],
   KeyM: ['mirror'],
+  F1: ['debug'],
+  Backquote: ['debug'],
   Escape: ['pause', 'back'],
   Enter: ['confirm'],
   NumpadEnter: ['confirm'],
@@ -85,7 +88,9 @@ export class Input {
     const actions = KEY_MAP[e.code];
     if (!actions) return;
     // Keep the browser from scrolling the page out from under the canvas.
-    if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+    if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'F1') {
+      e.preventDefault();
+    }
     if (e.repeat) return;
     for (const a of actions) {
       this.held.add(a);

@@ -28,7 +28,33 @@ npm run build    # typecheck + production bundle into dist/
 | Change camera | C | RB |
 | Look back | B | LB |
 | Toggle rear-view mirror | M | Select |
+| Debug & tuning overlay | F1 | — |
 | Pause | Esc | Start |
+
+## Suspension and tuning
+
+The suspension is deliberately underdamped, so trucks visibly rebound. The
+stock baseline runs a 1.42Hz ride frequency at a 0.27 rebound damping ratio,
+which from a 3.5m drop gives a clear quarter-metre bounce.
+
+Bounce is not free. Measured over a 75-second autopilot lap, the flip count
+roughly doubles going from 1.2 rebound damping to 0.95, because a
+fast-extending spring flicks the truck sideways on landing. The stock values
+sit at the point where the rebound is clearly visible and the truck still
+completes laps without pitching over. If you want it wilder, that is the knob —
+and the tradeoff.
+
+Every physics number is per-vehicle and editable in the JSON or the Blender
+panel: mass, spring rate, rebound and compression damping, travel, wheel size,
+axle positions, engine force, top speed, steering rate and lock, grip, roll,
+downforce and mid-air control.
+
+Raw numbers don't tell you how a truck will feel, so both the **F1 overlay**
+and the Blender **Response** panel show the derived figures that do — ride
+frequency, damping ratios with a plain-language verdict, ride height, resting
+squat, remaining bump travel, launch acceleration, and how close the truck runs
+to lifting its nose. The overlay adds live per-wheel suspension travel, which
+goes red when a spring hits its bump stop.
 
 ## Trucks and terrain
 
@@ -167,20 +193,46 @@ For where the tooling is going, see [`docs/engine-tools.md`](docs/engine-tools.m
 
 ## Adding content
 
-Tracks and vehicles are data. Drop exported JSON (and any `.glb`) into
-`public/content/` and list the JSON in `public/content/manifest.json`:
+**Drop the file in `public/content/` and it appears.** Anything named
+`*.mtmtrack.json` or `*.mtmvehicle.json` is discovered automatically — no
+manifest to edit. A `manifest.json` is still read if present, for files that
+don't follow the naming convention; it adds to the scan rather than replacing
+it.
+
+An entry whose `id` matches a built-in replaces it, which is how you iterate on
+a stock course. Loading is best-effort: a malformed file is skipped with a
+console warning rather than stopping the game.
+
+**Live reload.** With `npm run dev` running, editing a track, truck or model
+reloads it immediately — including rebuilding the race you are currently
+driving. No restart, no reselecting from the menus.
+
+**Artwork.** Tracks can supply their own ground and road images instead of the
+procedural textures:
 
 ```json
-{
-  "tracks": ["my-track.mtmtrack.json"],
-  "vehicles": ["my-truck.mtmvehicle.json"]
+"environment": {
+  "surface": "dirt",
+  "artwork": {
+    "ground": "content/my-dirt.png", "groundRepeat": 90,
+    "road": "content/my-road.png",   "roadRepeatMetres": 8
+  }
 }
 ```
 
-Custom entries appear in the select screens next to the built-ins, and an entry
-whose `id` matches a built-in replaces it — handy for iterating on a stock
-course. Loading is best-effort: a malformed file is skipped with a console
-warning rather than stopping the game.
+Both fall back to the procedural theme if the image is missing, so a broken
+path costs you a texture rather than the track. Hand-modelled scenery arrives
+as a `.glb` from the Blender exporter, textures included.
+
+## Debug overlay
+
+**F1** during a race draws what the simulation actually believes: collision
+volumes straight out of the physics world (orange for static, cyan for truck
+chassis), checkpoint gates, spawn points and the AI racing line. Because the
+shapes come from the physics rather than the source data, a mismatch between
+what you modelled and what you collide with shows up immediately.
+
+It also opens a tuning panel — see below.
 
 The examples in `public/content/` show the expected shape, including a
 vehicle that loads its body and wheels from a glTF file.
@@ -191,6 +243,7 @@ vehicle that loads its body and wheels from a glTF file.
 npm run typecheck                        # strict TypeScript
 python3 blender/tests/test_convert.py    # Blender <-> game coordinate conversion
 python3 blender/tests/test_collision.py  # collider convexity check
+python3 blender/tests/test_handling.py   # derived handling numbers
 ```
 
 Both suites cover things whose failure mode is invisible: a wrong axis gives a

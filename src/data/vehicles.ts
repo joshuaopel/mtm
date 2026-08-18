@@ -38,13 +38,22 @@ const BASE: VehiclePhysics = {
   suspensionRest: 1.0,
   // Soft: rest compression is 19.6 / (4 x stiffness) = ~0.25m of visible squat.
   suspensionStiffness: 20,
-  suspensionDamping: 2.1,
-  suspensionCompression: 3.2,
+  // Deliberately underdamped so the truck visibly rebounds, but only as far
+  // as it can without pitching itself over.
+  //
+  // Measured from a 3.5m drop: 2.1 gives a 6cm hop you cannot see, 0.95
+  // gives two big bounces, 0.5 gives three and 2.2s of wallow. Bounce is not
+  // free, though — over a 75s autopilot lap the flip count roughly doubles
+  // between 1.2 and 0.95, because a fast-extending spring flicks the truck
+  // on landing. 1.2 keeps a clear quarter-metre rebound at the best measured
+  // race progress. Roll influence barely moved the flip rate either way.
+  suspensionDamping: 1.2,
+  suspensionCompression: 2.3,
   maxSuspensionTravel: 1.1,
   maxSuspensionForce: 220000,
   frictionSlip: 2.8,
   // Enough body roll to feel the weight transfer, short of tipping over.
-  rollInfluence: 0.12,
+  rollInfluence: 0.10,
   engineForce: 4200,
   brakeForce: 62,
   handbrakeForce: 155,
@@ -116,6 +125,9 @@ export const VEHICLES: MTMVehicle[] = [
       steerRate: 2.0,
       // Stiffer to carry the extra tonne without lying on its bump stops.
       suspensionStiffness: 28,
+      // Heavier, and it should feel planted rather than floaty.
+      suspensionDamping: 1.55,
+      suspensionCompression: 2.9,
       maxSuspensionForce: 300000,
       maxSuspensionTravel: 1.0,
       rollInfluence: 0.09,
@@ -149,8 +161,10 @@ export const VEHICLES: MTMVehicle[] = [
       // everything else in the field.
       maxSuspensionTravel: 1.45,
       suspensionStiffness: 16,
-      suspensionDamping: 1.8,
-      suspensionCompression: 2.8,
+      // The loosest springs in the field: it floats on landings by design,
+      // and is correspondingly the easiest to land badly.
+      suspensionDamping: 1.0,
+      suspensionCompression: 2.2,
       wheelRadius: 1.0,
       engineForce: 3900,
       topSpeed: 39,
@@ -185,6 +199,8 @@ export const VEHICLES: MTMVehicle[] = [
       maxSteer: 0.52,
       steerRate: 2.3,
       suspensionStiffness: 26,
+      suspensionDamping: 1.35,
+      suspensionCompression: 2.5,
       maxSuspensionTravel: 0.9,
       handbrakeForce: 200,
       downforce: 3.6,
@@ -217,6 +233,8 @@ export const VEHICLES: MTMVehicle[] = [
       highSpeedSteerFactor: 0.55,
       frictionSlip: 3.1,
       suspensionStiffness: 15,
+      suspensionDamping: 1.0,
+      suspensionCompression: 2.1,
       maxSuspensionTravel: 1.15,
       wheelRadius: 0.86,
       // Light and tall: it changes direction instantly and leans hard doing it.
@@ -252,6 +270,9 @@ export const VEHICLES: MTMVehicle[] = [
       // Stiff and low-travel for stability at speed, which costs it dearly
       // over the rough stuff.
       suspensionStiffness: 27,
+      // Tightest damping in the field: stability at speed is its whole point.
+      suspensionDamping: 1.7,
+      suspensionCompression: 3.0,
       maxSuspensionTravel: 0.8,
       suspensionRest: 0.9,
       rollInfluence: 0.08,

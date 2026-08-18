@@ -122,7 +122,13 @@ export them as a `.glb` the game uses instead.
    chassis collision box, the wheels at full droop, resting height and full
    compression, the ground plane, and the centre of mass. It reports the
    wheelbase, track, ride height, clearance and resting squat.
-4. **Validate Vehicle** catches the settings that make a truck undriveable:
+4. Watch the **Response** panel as you work. It shows what the numbers
+   actually produce — ride frequency, rebound and compression damping ratios
+   with a plain-language verdict, ride height, resting squat, remaining bump
+   travel, launch acceleration, and how close the truck runs to lifting its
+   nose under power. These are the figures that decide how it feels; the
+   sliders above are just their inputs.
+5. **Validate Vehicle** catches the settings that make a truck undriveable:
    suspension too soft for the mass, a chassis box reaching below the wheels.
 
 You can drag the reference wheels around and press **Read Back From Rig** to
@@ -174,4 +180,5 @@ The coordinate conversion has unit tests that run without Blender:
 ```bash
 python3 blender/tests/test_convert.py    # coordinate conversion
 python3 blender/tests/test_collision.py  # collider convexity check
+python3 blender/tests/test_handling.py   # derived handling numbers
 ```

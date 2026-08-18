@@ -18,6 +18,13 @@ const loader = new GLTFLoader();
 const cache = new Map<string, Promise<THREE.Group>>();
 
 /**
+ * Bumped whenever the cache is cleared for a live reload, and appended to
+ * request URLs. Without it the browser's own HTTP cache serves the old model
+ * back and an edited file appears not to have changed.
+ */
+let cacheEpoch = 0;
+
+/**
  * Materials arriving from glTF are physically-based, which looks wrong next
  * to the flat-shaded procedural geometry and costs more to draw. Swapping
  * them for Lambert keeps imported models in the same visual language as
@@ -61,9 +68,10 @@ function loadShared(url: string): Promise<THREE.Group> {
   const existing = cache.get(url);
   if (existing) return existing;
 
+  const requestUrl = cacheEpoch === 0 ? url : `${url}?v=${cacheEpoch}`;
   const promise = new Promise<THREE.Group>((resolve, reject) => {
     loader.load(
-      url,
+      requestUrl,
       (gltf) => {
         retroifyMaterials(gltf.scene);
         resolve(gltf.scene);
@@ -142,6 +150,11 @@ export function disposeModel(root: THREE.Object3D): void {
   });
 }
 
+/**
+ * Forget every cached model so the next load re-fetches from disk. Used by
+ * live reload; the epoch bump defeats the browser's HTTP cache too.
+ */
 export function clearModelCache(): void {
   cache.clear();
+  cacheEpoch += 1;
 }

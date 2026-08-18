@@ -35,6 +35,30 @@ export interface TrackEnvironment {
   ambientColor: string;
   /** Surface palette key, see `SURFACE_THEMES` in Terrain.ts. */
   surface: 'dirt' | 'sand' | 'snow' | 'mud' | 'slag' | 'grass';
+  /**
+   * Optional artwork overriding the procedural surfaces.
+   *
+   * Both fall back to the `surface` theme when absent or when the image
+   * fails to load, so a track always renders even with a broken path.
+   */
+  artwork?: TrackArtwork;
+}
+
+export interface TrackArtwork {
+  /** Image used for the terrain, tiled across the whole patch. */
+  ground?: string;
+  /** How many times the ground image repeats across the terrain. */
+  groundRepeat?: number;
+  /** Image used for the road ribbon. */
+  road?: string;
+  /** Metres of road per vertical repeat of the road image. */
+  roadRepeatMetres?: number;
+  /**
+   * Drop imported artwork to nearest-neighbour filtering, matching the
+   * built-in textures. Turn it off for artwork drawn at a higher resolution
+   * that you want to stay smooth.
+   */
+  pixelated?: boolean;
 }
 
 /**

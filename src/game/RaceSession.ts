@@ -8,6 +8,7 @@ import { Vehicle } from './Vehicle';
 import { AIDriver, type Difficulty } from './AIDriver';
 import { Race, type Racer } from './Race';
 import { ChaseCamera } from './ChaseCamera';
+import { DebugOverlay } from './DebugOverlay';
 import type { MTMTrack, MTMVehicle } from './formats';
 
 /** Physics runs at a fixed rate; rendering is decoupled from it. */
@@ -84,6 +85,9 @@ export class RaceSession {
   private previousVerticalSpeed = 0;
   paused = false;
 
+  /** Collision, gate and AI-path visualisation. Off until toggled. */
+  readonly debug = new DebugOverlay();
+
   constructor(setup: RaceSetup, viewAspect: number, mirrorAspect = 3.2) {
     this.setup = setup;
     const models = setup.models ?? new Map<string, THREE.Group>();
@@ -139,6 +143,8 @@ export class RaceSession {
       }
     }
 
+    this.track.scene.add(this.debug.group);
+
     const player = this.race.player;
     if (!player) throw new Error('race created without a player');
     this.playerVehicle = player.vehicle;
@@ -177,6 +183,7 @@ export class RaceSession {
 
     this.camera.update(frameTime, this.playerVehicle);
     this.updateAudio(audio, input);
+    this.debug.update(this.track, this.race);
 
     if (this.eventTimer > 0) {
       this.eventTimer -= frameTime;
@@ -296,7 +303,13 @@ export class RaceSession {
     this.camera.setAspect(aspect);
   }
 
+  /** Toggle the debug overlay; returns its new visibility. */
+  toggleDebug(): boolean {
+    return this.debug.toggle(this.track, this.race);
+  }
+
   dispose(): void {
+    this.debug.dispose();
     for (const racer of this.race.racers) racer.vehicle.dispose();
     this.track.dispose();
   }

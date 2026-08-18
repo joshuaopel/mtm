@@ -487,3 +487,85 @@ body {
   :root { --ui-scale: 0.85; }
   .split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
 }
+
+/* --- debug / tuning overlay --------------------------------------------- */
+
+.telemetry {
+  position: absolute;
+  /* Left column, below the position/lap box. The centre is occupied by the
+     mirror and, more importantly, by the truck you are trying to watch. */
+  top: 118px;
+  left: 12px;
+  padding: 8px 12px;
+  min-width: 264px;
+  max-height: calc(100vh - 300px);
+  overflow: hidden;
+  font-size: calc(11px * var(--ui-scale));
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  line-height: 1.5;
+  pointer-events: none;
+  background: rgba(20, 20, 15, 0.86);
+}
+
+.telemetry-title {
+  color: var(--amber);
+  letter-spacing: 3px;
+  border-bottom: 1px solid var(--steel-dk);
+  margin: 6px 0 4px;
+  font-size: calc(10px * var(--ui-scale));
+}
+
+.telemetry-title:first-child {
+  margin-top: 0;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 12px;
+}
+
+.telemetry-grid .k,
+.telemetry-wheels .k {
+  color: var(--steel-lt);
+}
+
+.telemetry-grid .v,
+.telemetry-wheels .v {
+  color: var(--paper);
+  text-align: right;
+}
+
+.telemetry-wheels {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 3px 10px;
+  align-items: center;
+}
+
+.telemetry-wheels .travel {
+  height: 9px;
+  padding: 1px;
+}
+
+.telemetry-wheels .travel i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--go);
+}
+
+/* Red once the spring is against its bump stop — the thing you are usually
+   looking for when a truck lands badly. */
+.telemetry-wheels .travel i.bottomed {
+  background: var(--warn);
+}
+
+.telemetry-hint {
+  margin-top: 6px;
+  color: var(--steel);
+  font-size: calc(9px * var(--ui-scale));
+  letter-spacing: 2px;
+  text-align: center;
+}

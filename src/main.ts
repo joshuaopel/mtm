@@ -6,6 +6,7 @@ import { EngineAudio } from './core/Audio';
 import { RaceSession, collectModelUrls } from './game/RaceSession';
 import { Showroom } from './game/Showroom';
 import { Hud } from './ui/Hud';
+import { Telemetry } from './ui/Telemetry';
 import {
   ControlsScreen,
   LoadingScreen,
@@ -19,7 +20,7 @@ import type { Screen } from './ui/Screen';
 import { TRACKS } from './data/tracks';
 import { VEHICLES } from './data/vehicles';
 import { loadContent } from './game/ContentLoader';
-import { loadModels } from './core/Assets';
+import { loadModels, clearModelCache } from './core/Assets';
 import type { MTMTrack, MTMVehicle } from './game/formats';
 import type { Difficulty } from './game/AIDriver';
 
@@ -35,6 +36,9 @@ class Game {
   private audio = new EngineAudio();
   private showroom: Showroom;
   private hud = new Hud();
+  private telemetry = new Telemetry();
+  /** Debug overlay state, kept here so it survives a race restart. */
+  private debugVisible = false;
 
   private uiRoot: HTMLElement;
   private screen: Screen | null = null;
@@ -73,6 +77,7 @@ class Game {
     this.showTitle();
     requestAnimationFrame(this.frame);
     void this.loadCustomContent();
+    this.attachLiveReload();
 
     // Debug handle for the dev server only, used by the smoke tests to
     // inspect simulation state without reaching through the UI.
@@ -99,6 +104,62 @@ class Game {
     } catch (error) {
       console.warn('[content] custom content failed to load', error);
     }
+  }
+
+  /**
+   * Live reload, dev server only.
+   *
+   * The Vite content plugin watches `public/content/` and pings us when a
+   * track, vehicle or model file changes. Editing a track and seeing it
+   * without leaving the game is the single biggest saving in the authoring
+   * loop — the alternative is export, alt-tab, reselect, wait for the
+   * countdown, every time.
+   */
+  private attachLiveReload(): void {
+    if (!import.meta.hot) return;
+    import.meta.hot.on('mtm:content-changed', (data: { file?: string }) => {
+      void this.hotReloadContent(data?.file);
+    });
+    console.info('[content] live reload active — edit files in public/content/');
+  }
+
+  private async hotReloadContent(file?: string): Promise<void> {
+    // Models are cached by URL, so an edited .glb would otherwise be ignored.
+    clearModelCache();
+    await this.loadCustomContent();
+
+    // Re-resolve the current selections against the freshly loaded lists, so
+    // editing the track you are sitting on picks up the new version rather
+    // than a stale object with the same name.
+    this.selectedTrack =
+      this.tracks.find((t) => t.id === this.selectedTrack.id) ?? this.tracks[0];
+    this.selectedVehicle =
+      this.vehicles.find((v) => v.id === this.selectedVehicle.id) ?? this.vehicles[0];
+
+    const label = file ? `${file} reloaded` : 'content reloaded';
+
+    switch (this.mode) {
+      case 'racing':
+      case 'paused':
+        // Rebuild the race in place. Restarting is the honest option: track
+        // geometry and physics bodies are built once at construction, so
+        // there is no way to swap them under a running simulation.
+        await this.startRace();
+        this.session?.flash(label.toUpperCase(), 2.2);
+        break;
+      case 'tracks':
+        this.showTrackSelect();
+        break;
+      case 'vehicles':
+        this.showVehicleSelect();
+        break;
+      case 'title':
+        this.showroom.setVehicle(this.selectedVehicle);
+        break;
+      default:
+        break;
+    }
+    console.info(`[content] ${label}`);
   }
 
   /**
@@ -155,6 +216,27 @@ class Game {
         };
       }),
     };
+  }
+
+  /** Debug overlay state, for the automated tests. */
+  debugSessionOverlay(): unknown {
+    const overlay = this.session?.debug;
+    if (!overlay) return null;
+    let lines = 0;
+    overlay.group.traverse((o) => {
+      if ((o as { isLineSegments?: boolean }).isLineSegments) lines++;
+    });
+    return { visible: overlay.visible, children: overlay.group.children.length, lineSets: lines };
+  }
+
+  /** Name of the loaded track, for debugging. */
+  debugTrackName(): string {
+    return this.session?.setup.track.name ?? this.selectedTrack.name;
+  }
+
+  /** Total laps of the running race, for debugging. */
+  debugTotalLaps(): number | null {
+    return this.session?.race.totalLaps ?? null;
   }
 
   /** Current screen mode, for debugging. */
@@ -356,8 +438,26 @@ class Game {
     loading.setProgress(1, 'READY');
     await nextFrame();
 
-    this.setScreen({ root: this.hud.root }, 'racing');
+    this.setRacingScreen();
     this.lastFrame = performance.now();
+
+    // Restore the overlay across a restart, so live-reloading a track you are
+    // debugging doesn't silently turn the visualisation off.
+    if (this.debugVisible) {
+      this.session.toggleDebug();
+      this.setRacingScreen();
+    }
+  }
+
+  /** The in-race screen: HUD, plus the tuning panel when debug is on. */
+  private setRacingScreen(): void {
+    const root = document.createElement('div');
+    root.style.position = 'absolute';
+    root.style.inset = '0';
+    root.style.pointerEvents = 'none';
+    root.append(this.hud.root);
+    if (this.debugVisible) root.append(this.telemetry.root);
+    this.setScreen({ root }, 'racing');
   }
 
   private pause(): void {
@@ -376,7 +476,7 @@ class Game {
   private resume(): void {
     if (!this.session) return;
     this.session.paused = false;
-    this.setScreen({ root: this.hud.root }, 'racing');
+    this.setRacingScreen();
     this.lastFrame = performance.now();
   }
 
@@ -441,6 +541,10 @@ class Game {
     }
     if (this.input.pressed('reset')) session.rescuePlayer();
     if (this.input.pressed('camera')) session.camera.cycleMode();
+    if (this.input.pressed('debug')) {
+      this.debugVisible = session.toggleDebug();
+      this.setRacingScreen();
+    }
     if (this.input.pressed('mirror')) {
       this.renderer.setMirrorEnabled(!this.renderer.isMirrorEnabled);
       session.flash(this.renderer.isMirrorEnabled ? 'MIRROR ON' : 'MIRROR OFF');
@@ -449,6 +553,7 @@ class Game {
 
     session.update(frameTime, this.input, this.audio);
     this.hud.update(session);
+    if (this.debugVisible) this.telemetry.update(session);
     this.renderer.render(
       session.scene,
       session.camera.camera,

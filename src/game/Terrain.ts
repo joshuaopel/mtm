@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { ValueNoise2D, clamp, smootherstep } from '../core/Noise';
-import { groundTexture } from '../core/Textures';
-import type { TrackTerrain, TerrainFeature } from './formats';
+import { groundTexture, imageTexture } from '../core/Textures';
+import type { TrackTerrain, TerrainFeature, TrackArtwork } from './formats';
 import type { RoadPath } from './RoadPath';
 
 /**
@@ -25,14 +25,19 @@ export class Terrain {
   readonly mesh: THREE.Mesh;
   readonly body: CANNON.Body;
 
-  constructor(config: TrackTerrain, road: RoadPath, surface: string) {
+  constructor(
+    config: TrackTerrain,
+    road: RoadPath,
+    surface: string,
+    artwork?: TrackArtwork,
+  ) {
     this.size = config.size;
     this.segments = config.segments;
     this.elementSize = config.size / config.segments;
     this.heights = new Float32Array((config.segments + 1) ** 2);
 
     this.generateHeights(config, road);
-    this.mesh = this.buildMesh(surface);
+    this.mesh = this.buildMesh(surface, artwork);
     this.body = this.buildBody();
   }
 
@@ -163,7 +168,7 @@ export class Terrain {
     }
   }
 
-  private buildMesh(surface: string): THREE.Mesh {
+  private buildMesh(surface: string, artwork?: TrackArtwork): THREE.Mesh {
     const geometry = new THREE.PlaneGeometry(this.size, this.size, this.segments, this.segments);
     geometry.rotateX(-Math.PI / 2);
 
@@ -191,8 +196,20 @@ export class Terrain {
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
+    // Custom artwork when the track supplies it, the procedural theme
+    // otherwise. Repeat defaults to one tile per 8m so hand-drawn ground
+    // lands at roughly the same scale as the generated textures.
+    const repeat = artwork?.groundRepeat ?? this.size / 8;
+    const map = artwork?.ground
+      ? imageTexture(artwork.ground, {
+          repeatX: repeat,
+          repeatY: repeat,
+          pixelated: artwork.pixelated,
+        })
+      : groundTexture(surface, this.size / 8);
+
     const material = new THREE.MeshLambertMaterial({
-      map: groundTexture(surface, this.size / 8),
+      map,
       vertexColors: true,
       flatShading: true,
     });

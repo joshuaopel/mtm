@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { Rng } from '../core/Noise';
-import { checkerTexture, roadTexture, skyTexture, wallTexture } from '../core/Textures';
+import { checkerTexture, imageTexture, roadTexture, skyTexture, wallTexture } from '../core/Textures';
 import { RoadPath } from './RoadPath';
 import { Terrain } from './Terrain';
 import { buildProp } from './Props';
@@ -73,7 +73,12 @@ export class Track {
     (this.world.solver as CANNON.GSSolver).iterations = 12;
     this.world.allowSleep = true;
 
-    this.terrain = new Terrain(definition.terrain, this.road, definition.environment.surface);
+    this.terrain = new Terrain(
+      definition.terrain,
+      this.road,
+      definition.environment.surface,
+      definition.environment.artwork,
+    );
     this.terrain.body.material = this.groundMaterial;
     this.scene.add(this.terrain.mesh);
     this.world.addBody(this.terrain.body);
@@ -193,8 +198,19 @@ export class Track {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
+    // Road artwork repeats along the ribbon's length; the UVs above are laid
+    // out in metres, so the repeat is expressed the same way.
+    const artwork = this.definition.environment.artwork;
+    const roadMap = artwork?.road
+      ? imageTexture(artwork.road, {
+          repeatX: 1,
+          repeatY: 8 / (artwork.roadRepeatMetres ?? 8),
+          pixelated: artwork.pixelated,
+        })
+      : roadTexture(this.definition.environment.surface);
+
     const material = new THREE.MeshLambertMaterial({
-      map: roadTexture(this.definition.environment.surface),
+      map: roadMap,
       // Pull the ribbon towards the camera in depth so it wins against the
       // terrain it sits on without needing a bigger physical offset.
       polygonOffset: true,

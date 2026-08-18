@@ -424,6 +424,43 @@ export function treadTexture(): THREE.Texture {
   });
 }
 
+/**
+ * Load a texture from an image file, for tracks that ship their own artwork.
+ *
+ * Returns immediately with a placeholder that is filled in once the image
+ * arrives, which is how three's loader works — the material picks up the
+ * pixels on the next frame. A failed load leaves the placeholder in place and
+ * logs, rather than throwing, so a broken path costs you a grey road and not
+ * the whole track.
+ */
+export function imageTexture(
+  url: string,
+  options: { repeatX?: number; repeatY?: number; pixelated?: boolean } = {},
+): THREE.Texture {
+  const key = `image:${url}:${options.repeatX ?? 1}:${options.repeatY ?? 1}:${options.pixelated !== false}`;
+  return cached(key, () => {
+    const loader = new THREE.TextureLoader();
+    const texture = loader.load(
+      url,
+      undefined,
+      undefined,
+      () => console.warn(`[textures] could not load artwork "${url}"; keeping the fallback`),
+    );
+
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(options.repeatX ?? 1, options.repeatY ?? 1);
+    texture.colorSpace = THREE.SRGBColorSpace;
+
+    if (options.pixelated !== false) {
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestMipmapLinearFilter;
+    }
+    texture.anisotropy = 1;
+    return texture;
+  });
+}
+
 export function disposeTextures(): void {
   for (const texture of cache.values()) texture.dispose();
   cache.clear();
