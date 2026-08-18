@@ -37,6 +37,27 @@ export interface RaceSetup {
   vehiclePool: MTMVehicle[];
   opponents: number;
   difficulty: Difficulty;
+  /** Pre-loaded glTF models keyed by URL, from `collectModelUrls`. */
+  models?: Map<string, THREE.Group>;
+}
+
+/**
+ * Every model URL a race needs, so they can be fetched before the session is
+ * built. Construction is synchronous — the physics world and scene graph are
+ * assembled in one pass — so anything loaded from the network has to be in
+ * hand first.
+ */
+export function collectModelUrls(setup: {
+  track: MTMTrack;
+  playerVehicle: MTMVehicle;
+  vehiclePool: MTMVehicle[];
+}): string[] {
+  const urls: string[] = [];
+  if (setup.track.sceneryModel) urls.push(setup.track.sceneryModel);
+  for (const vehicle of [setup.playerVehicle, ...setup.vehiclePool]) {
+    if (vehicle.model?.url) urls.push(vehicle.model.url);
+  }
+  return [...new Set(urls)];
 }
 
 /**
@@ -65,7 +86,8 @@ export class RaceSession {
 
   constructor(setup: RaceSetup, viewAspect: number, mirrorAspect = 3.2) {
     this.setup = setup;
-    this.track = new Track(setup.track);
+    const models = setup.models ?? new Map<string, THREE.Group>();
+    this.track = new Track(setup.track, models);
     this.race = new Race(this.track, setup.track.laps);
     this.camera = new ChaseCamera(viewAspect, this.track.viewDistance, mirrorAspect);
     this.camera.setGroundProbe((x, z) => this.track.terrain.heightAt(x, z));
@@ -90,7 +112,16 @@ export class RaceSession {
       const definition = isPlayer ? setup.playerVehicle : opponentVehicles[slot];
       const spawn = this.track.spawns[slot];
 
-      const vehicle = new Vehicle(definition, this.track.world, wheelMaterial);
+      // Each truck gets its own clone of the model, since four of them may
+      // share one file and each needs an independent transform.
+      const modelUrl = definition.model?.url;
+      const shared = modelUrl ? models.get(modelUrl) : undefined;
+      const vehicle = new Vehicle(
+        definition,
+        this.track.world,
+        wheelMaterial,
+        shared ? (shared.clone(true) as THREE.Group) : undefined,
+      );
       vehicle.reset(spawn.position, spawn.heading);
       this.track.scene.add(vehicle.object);
 

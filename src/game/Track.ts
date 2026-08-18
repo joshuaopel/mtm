@@ -5,7 +5,8 @@ import { checkerTexture, roadTexture, skyTexture, wallTexture } from '../core/Te
 import { RoadPath } from './RoadPath';
 import { Terrain } from './Terrain';
 import { buildProp } from './Props';
-import type { MTMTrack, TrackCheckpoint, TrackWall } from './formats';
+import { disposeModel } from '../core/Assets';
+import type { MTMTrack, TrackCheckpoint, TrackCollider, TrackWall } from './formats';
 
 /**
  * How far above the road a truck is placed.
@@ -55,9 +56,12 @@ export class Track {
   readonly viewDistance: number;
 
   private disposables: { dispose(): void }[] = [];
+  /** Pre-loaded glTF models, keyed by URL. Empty for fully procedural tracks. */
+  private models: Map<string, THREE.Group>;
 
-  constructor(definition: MTMTrack) {
+  constructor(definition: MTMTrack, models: Map<string, THREE.Group> = new Map()) {
     this.definition = definition;
+    this.models = models;
     this.road = new RoadPath(definition.road);
 
     this.world = new CANNON.World({
@@ -85,6 +89,8 @@ export class Track {
     this.buildWalls(this.collectWalls());
     this.buildProps();
     this.buildScatter();
+    this.buildScenery();
+    this.buildColliders();
     this.buildCheckpoints();
     this.buildStartLine();
     this.buildSpawns();
@@ -394,6 +400,86 @@ export class Track {
         }
         placed++;
       }
+    }
+  }
+
+  /** Drop the hand-modelled scenery mesh in, if the track ships one. */
+  private buildScenery(): void {
+    const url = this.definition.sceneryModel;
+    if (!url) return;
+
+    const model = this.models.get(url);
+    if (!model) {
+      // Not fatal: the track still plays, it just looks bare. The loader has
+      // already logged why the file didn't arrive.
+      console.warn(`[track] scenery model "${url}" was not loaded; skipping`);
+      return;
+    }
+
+    model.name = 'scenery';
+    this.scene.add(model);
+    this.disposables.push({ dispose: () => disposeModel(model) });
+  }
+
+  /**
+   * Hand-authored collision volumes.
+   *
+   * Kept separate from the scenery mesh so collision can be simpler than
+   * what you see — a detailed building can be fenced by two boxes, which is
+   * both faster and far more predictable to drive against.
+   */
+  private buildColliders(): void {
+    const colliders = this.definition.colliders;
+    if (!colliders?.length) return;
+
+    for (const collider of colliders) {
+      const shape = this.buildColliderShape(collider);
+      if (!shape) continue;
+
+      const body = new CANNON.Body({ mass: 0, shape, material: this.groundMaterial });
+      body.position.set(collider.pos[0], collider.pos[1], collider.pos[2]);
+      body.quaternion.setFromEuler(
+        (collider.pitch ?? 0) * (Math.PI / 180),
+        (collider.rotation ?? 0) * (Math.PI / 180),
+        0,
+        'YXZ',
+      );
+      this.world.addBody(body);
+    }
+  }
+
+  private buildColliderShape(collider: TrackCollider): CANNON.Shape | null {
+    const shape = collider.shape;
+
+    if (shape.kind === 'box') {
+      return new CANNON.Box(
+        new CANNON.Vec3(shape.size[0] / 2, shape.size[1] / 2, shape.size[2] / 2),
+      );
+    }
+
+    // Convex hull. cannon wants vertices as Vec3 and faces as index loops.
+    const vertexCount = Math.floor(shape.vertices.length / 3);
+    if (vertexCount < 4 || shape.faces.length < 4) {
+      console.warn(
+        `[track] collider "${collider.name ?? 'unnamed'}" has too few vertices or faces; skipping`,
+      );
+      return null;
+    }
+
+    const vertices: CANNON.Vec3[] = [];
+    for (let i = 0; i < vertexCount; i++) {
+      vertices.push(
+        new CANNON.Vec3(shape.vertices[i * 3], shape.vertices[i * 3 + 1], shape.vertices[i * 3 + 2]),
+      );
+    }
+
+    try {
+      return new CANNON.ConvexPolyhedron({ vertices, faces: shape.faces });
+    } catch (error) {
+      // cannon throws on degenerate hulls rather than returning an error, and
+      // one bad collider must not take the whole track down.
+      console.warn(`[track] collider "${collider.name ?? 'unnamed'}" is not a valid hull:`, error);
+      return null;
     }
   }
 

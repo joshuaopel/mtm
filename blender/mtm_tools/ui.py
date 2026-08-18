@@ -112,6 +112,31 @@ class MTM_PT_track_build(MTMPanel, Panel):
         box.operator("mtm.generate_barriers", icon="MOD_ARRAY")
 
 
+class MTM_PT_track_collision(MTMPanel, Panel):
+    bl_label = "Collision & Scenery"
+    bl_idname = "MTM_PT_track_collision"
+    bl_parent_id = "MTM_PT_track"
+
+    def draw(self, context):
+        layout = self.layout
+
+        box = layout.box()
+        box.label(text="Colliders", icon="MESH_ICOSPHERE")
+        box.operator_menu_enum("mtm.collider_from_selection", "shape", text="Collider From Selection")
+        box.operator("mtm.check_colliders", icon="CHECKMARK")
+        box.label(text="Convex or box only — see the manual", icon="INFO")
+
+        box = layout.box()
+        box.label(text="Scenery", icon="OUTLINER_OB_MESH")
+        box.label(text="Tag meshes as Scenery to export them")
+        box.label(text="into the track's .glb", icon="BLANK1")
+
+        box = layout.box()
+        box.label(text="Viewport", icon="RESTRICT_VIEW_OFF")
+        box.operator("mtm.colour_by_role", icon="COLOR")
+        box.operator("mtm.select_untagged", icon="SELECT_SET")
+
+
 class MTM_PT_object(MTMPanel, Panel):
     bl_label = "Selected Object"
     bl_idname = "MTM_PT_object"
@@ -139,6 +164,13 @@ class MTM_PT_object(MTMPanel, Panel):
             box = layout.box()
             box.prop(mtm, "checkpoint_order")
             box.prop(mtm, "checkpoint_width")
+        elif mtm.role == "COLLIDER":
+            box = layout.box()
+            box.prop(mtm, "collider_shape")
+            if mtm.collider_shape == "convex":
+                box.label(text="Mesh must be convex", icon="ERROR")
+        elif mtm.role == "SCENERY":
+            layout.box().label(text="Exported into the track .glb", icon="INFO")
         elif mtm.role == "SPAWN":
             layout.box().prop(mtm, "spawn_order")
         elif mtm.role == "FEATURE":
@@ -274,8 +306,40 @@ class MTM_PT_vehicle_look(MTMPanel, Panel):
         row.prop(settings, "light_bar", toggle=True)
 
 
+class MTM_PT_vehicle_model(MTMPanel, Panel):
+    bl_label = "Reference Rig & Model"
+    bl_idname = "MTM_PT_vehicle_model"
+    bl_parent_id = "MTM_PT_vehicle"
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.scene.mtm_vehicle
+
+        box = layout.box()
+        box.label(text="Reference Rig", icon="EMPTY_ARROWS")
+        box.operator("mtm.build_vehicle_rig", icon="OUTLINER_OB_MESH")
+        row = box.row(align=True)
+        row.operator("mtm.measure_vehicle_rig", icon="DRIVER_DISTANCE")
+        row.operator("mtm.clear_vehicle_rig", icon="TRASH")
+        box.label(text="Model against MTM_Body and MTM_Wheel", icon="INFO")
+
+        box = layout.box()
+        box.label(text="Your Model", icon="MESH_MONKEY")
+        box.operator("mtm.fit_body_to_chassis", icon="FULLSCREEN_ENTER")
+        box.operator("mtm.check_vehicle_model", icon="CHECKMARK")
+        box.operator("mtm.export_vehicle_model", icon="EXPORT")
+        box.prop(settings, "model_path")
+        if settings.model_path.strip():
+            column = box.column(align=True)
+            column.prop(settings, "model_scale")
+            column.prop(settings, "model_yaw")
+            column.prop(settings, "mirror_left_wheels")
+        else:
+            box.label(text="Blank = procedural body", icon="INFO")
+
+
 class MTM_PT_vehicle_export(MTMPanel, Panel):
-    bl_label = "Proxy & Export"
+    bl_label = "Export Vehicle"
     bl_idname = "MTM_PT_vehicle_export"
     bl_parent_id = "MTM_PT_vehicle"
 
@@ -283,12 +347,6 @@ class MTM_PT_vehicle_export(MTMPanel, Panel):
         layout = self.layout
         settings = context.scene.mtm_vehicle
 
-        column = layout.column(align=True)
-        column.operator("mtm.build_vehicle_proxy", icon="OUTLINER_OB_MESH")
-        column.operator("mtm.measure_vehicle_proxy", icon="DRIVER_DISTANCE")
-        column.operator("mtm.clear_vehicle_proxy", icon="TRASH")
-
-        layout.separator()
         layout.prop(settings, "export_path")
         row = layout.row(align=True)
         row.operator("mtm.validate_vehicle", icon="CHECKMARK")
@@ -300,12 +358,14 @@ _CLASSES = (
     MTM_PT_track_road,
     MTM_PT_track_environment,
     MTM_PT_track_build,
+    MTM_PT_track_collision,
     MTM_PT_track_export,
     MTM_PT_object,
     MTM_PT_vehicle,
     MTM_PT_vehicle_stats,
     MTM_PT_vehicle_physics,
     MTM_PT_vehicle_look,
+    MTM_PT_vehicle_model,
     MTM_PT_vehicle_export,
 )
 

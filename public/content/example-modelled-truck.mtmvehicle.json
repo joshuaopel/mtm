@@ -1,0 +1,77 @@
+{
+  "format": "mtm-vehicle",
+  "version": 1,
+  "id": "model-test",
+  "name": "MODEL TEST",
+  "blurb": "Exercises the glTF model path: body and wheels come from a modelled file rather than the procedural builder.",
+  "class": "CUSTOM",
+  "stats": {
+    "speed": 6,
+    "accel": 6,
+    "grip": 7,
+    "weight": 5,
+    "suspension": 7,
+    "toughness": 6
+  },
+  "physics": {
+    "mass": 1600,
+    "chassisSize": [
+      2.4,
+      1.0,
+      5.3
+    ],
+    "chassisOffset": [
+      0,
+      0.1,
+      0
+    ],
+    "wheelRadius": 0.92,
+    "wheelWidth": 0.62,
+    "frontAxle": [
+      1.34,
+      1.72
+    ],
+    "rearAxle": [
+      1.34,
+      -1.78
+    ],
+    "axleHeight": -0.35,
+    "suspensionRest": 1.0,
+    "suspensionStiffness": 20,
+    "suspensionDamping": 2.1,
+    "suspensionCompression": 3.2,
+    "maxSuspensionTravel": 1.1,
+    "maxSuspensionForce": 220000,
+    "frictionSlip": 2.8,
+    "rollInfluence": 0.12,
+    "engineForce": 4200,
+    "brakeForce": 62,
+    "handbrakeForce": 155,
+    "maxSteer": 0.58,
+    "steerRate": 2.4,
+    "highSpeedSteerFactor": 0.42,
+    "topSpeed": 38,
+    "downforce": 2.5,
+    "airControl": 2.6
+  },
+  "look": {
+    "style": "pickup",
+    "bodyColor": "#d82a8c",
+    "accentColor": "#ffffff",
+    "trimColor": "#222222",
+    "glassColor": "#88b0c8",
+    "rimColor": "#cccccc",
+    "livery": "solid",
+    "rollCage": false,
+    "stacks": false,
+    "lightBar": false
+  },
+  "model": {
+    "url": "content/example-modelled-truck.gltf",
+    "bodyNode": "MTM_Body",
+    "wheelNode": "MTM_Wheel",
+    "scale": 1.0,
+    "yawOffset": 0,
+    "mirrorLeftWheels": false
+  }
+}

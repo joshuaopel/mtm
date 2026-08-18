@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { treadTexture } from '../core/Textures';
+import { extractNode } from '../core/Assets';
 import type { MTMVehicle, VehicleLook } from './formats';
 
 /**
@@ -523,6 +524,64 @@ export interface TruckMesh {
   body: THREE.Group;
   /** Four wheels, in the same order as the physics wheel infos. */
   wheels: THREE.Group[];
+}
+
+/**
+ * Assemble a truck's visuals from a modelled glTF instead of primitives.
+ *
+ * The file supplies one body and one wheel; the wheel is cloned four times
+ * and driven by the physics rig. Returns null if the expected nodes are
+ * missing, so the caller can fall back to the procedural build rather than
+ * putting an invisible truck on the grid.
+ */
+export function buildTruckMeshFromModel(
+  vehicle: MTMVehicle,
+  model: THREE.Group,
+): TruckMesh | null {
+  const spec = vehicle.model;
+  if (!spec) return null;
+
+  const bodyName = spec.bodyNode ?? 'MTM_Body';
+  const wheelName = spec.wheelNode ?? 'MTM_Wheel';
+
+  const bodyNode = extractNode(model, bodyName);
+  const wheelNode = extractNode(model, wheelName);
+
+  if (!bodyNode || !wheelNode) {
+    const missing = [!bodyNode && bodyName, !wheelNode && wheelName].filter(Boolean).join(' and ');
+    console.warn(
+      `[vehicle] "${vehicle.id}" model is missing node ${missing}; using the procedural truck instead`,
+    );
+    return null;
+  }
+
+  const scale = spec.scale ?? 1;
+  const yaw = (spec.yawOffset ?? 0) * (Math.PI / 180);
+
+  // Wrap rather than transforming the imported node directly, so the model's
+  // own local transform (which positions it correctly relative to the chassis
+  // origin) is preserved underneath our scale and yaw correction.
+  const body = new THREE.Group();
+  body.add(bodyNode);
+  body.scale.setScalar(scale);
+  body.rotation.y = yaw;
+
+  const wheels: THREE.Group[] = [];
+  for (let i = 0; i < 4; i++) {
+    const wheel = new THREE.Group();
+    const instance = i === 0 ? wheelNode : wheelNode.clone(true);
+    wheel.add(instance);
+    wheel.scale.setScalar(scale);
+
+    // Wheels 0 and 2 are the left-hand pair. Mirroring is opt-in because it
+    // reverses any lettering moulded into the tyre.
+    if (spec.mirrorLeftWheels && i % 2 === 0) {
+      wheel.scale.x *= -1;
+    }
+    wheels.push(wheel);
+  }
+
+  return { body, wheels };
 }
 
 /** Build the complete visual rig for a vehicle definition. */

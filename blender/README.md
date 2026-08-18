@@ -28,6 +28,8 @@ without leaking into the track.
 | Spawn Point | Empty | A start-grid slot |
 | Checkpoint | Empty | An ordered gate |
 | Terrain Feature | Empty | A hill, crater or plateau |
+| Collider | Mesh | An invisible collision volume |
+| Scenery Mesh | Mesh | Visual geometry exported into the track's `.glb` |
 
 A typical session:
 
@@ -50,10 +52,48 @@ A typical session:
    Barrier Walls** to bake them as real objects you can then edit. Baking turns
    auto-barriers off so the course is not fenced twice.
 7. **Scatter Props** to dress the roadside.
-8. **Validate Track**, then **Export Track**.
+8. Model any custom geometry, tag it **Scenery Mesh**, and give it collision
+   (see below).
+9. **Validate Track**, then **Export Track**.
 
-Export writes to the path in the Export panel. Copy the result into the game's
-`public/content/` and add it to `manifest.json`.
+Export writes the JSON to the path in the Export panel, and a matching `.glb`
+of the scenery beside it. Copy **both** into the game's `public/content/` and
+add the JSON to `manifest.json`.
+
+## Collision
+
+Colliders are invisible volumes the trucks hit. They are separate from the
+scenery mesh on purpose: collision should almost always be simpler than what
+you see. A detailed building is best fenced by two boxes — faster to simulate
+and far more predictable to drive against than its own geometry.
+
+Select your scenery and use **Collider From Selection**, choosing:
+
+- **Box** — the object's oriented bounding box. Cheapest, most predictable,
+  and the right answer for most things.
+- **Convex Hull** — the mesh itself, which must already be convex.
+
+The source object is tagged **Scenery Mesh** automatically so it still gets
+drawn. Colliders are created wireframe, excluded from renders, and therefore
+kept out of the scenery `.glb`.
+
+### Only convex shapes work, and this matters
+
+The physics engine resolves box and convex-hull contacts properly, but its
+triangle meshes only collide reliably against spheres and rays. A concave
+collider will *look* fine, export fine, and load fine — and then let truck
+bodies drive straight through it at speed. Because the symptom appears a long
+way from the cause, the exporter refuses to write one.
+
+**Check Colliders** tests every convex hull and tells you, in metres, how far
+from convex it is. To collide a concave shape — an archway, an L-shaped
+building — split it into convex pieces and give each its own collider.
+
+### Seeing what you've tagged
+
+**Colour By Role** tints every tagged object by its role and switches the
+viewport to object colours. **Select Untagged Meshes** finds geometry that
+would be silently skipped at export.
 
 ### Coordinates
 
@@ -66,24 +106,59 @@ so what the colour picker shows is what the game draws.
 
 ## Building a vehicle
 
-Truck bodies are generated procedurally by the game from a style and a palette,
-so there is no mesh to model — a vehicle is a set of numbers.
+There are two ways to build a truck.
 
-1. Open the **Vehicle** panel and load the Light or Heavy preset as a start.
-2. **Build Proxy Rig** creates wireframe boxes and wheel cylinders in the
-   viewport from the current settings, with a ground plane so ride height is
-   readable. Move the wheels around and press **Read Back From Proxy** to pull
-   the axle positions back into the settings.
-3. Dial in physics, then pick a **Style** (silhouette family) and **Livery**.
-4. **Validate Vehicle** checks for the mistakes that make a truck undriveable —
-   suspension too soft for the mass, a chassis box that reaches below the
-   wheels, and so on.
-5. **Export Vehicle**.
+**Procedural** — pick a style and a palette and the game builds the body from
+primitives. No modelling, and it always fits the physics rig.
+
+**Modelled** — build your own body and wheel against the reference rig and
+export them as a `.glb` the game uses instead.
+
+### Both paths start the same way
+
+1. Open the **Vehicle** panel and load the Light or Heavy preset.
+2. Dial in the physics: mass, wheel size, axle positions, suspension.
+3. **Build Reference Rig** draws what the simulation actually believes — the
+   chassis collision box, the wheels at full droop, resting height and full
+   compression, the ground plane, and the centre of mass. It reports the
+   wheelbase, track, ride height, clearance and resting squat.
+4. **Validate Vehicle** catches the settings that make a truck undriveable:
+   suspension too soft for the mass, a chassis box reaching below the wheels.
+
+You can drag the reference wheels around and press **Read Back From Rig** to
+pull the axle positions back into the settings.
+
+### Modelling your own body
+
+The rig creates two slots: `MTM_Body` and `MTM_Wheel`. Either rename your
+meshes to match, or parent whole assemblies under the empties of those names.
+
+- **The body must be built around the centre of mass** — the red axes marker,
+  not the ground. That origin is what the runtime positions the truck by, so
+  a body modelled sitting on the floor will end up buried.
+- **The wheel must be modelled at the world origin**, and only once. The game
+  places all four copies itself from the physics rig; any offset you build in
+  is applied on top of that.
+- Check the body clears the wheels through their whole stroke — the blue
+  droop and bump rings show the extremes.
+
+**Fit Body To Chassis** scales and centres a body to the chassis box, fitting
+to the tightest axis so proportions survive. **Check Model Alignment** reports
+a body sitting above or below the centre of mass, a wheel modelled off-origin,
+and a wheel whose radius disagrees with the physics.
+
+Then **Export Model (.glb)**, which also fills in the **Model** path, and
+**Export Vehicle** to write the JSON. Copy both into `public/content/`.
+
+Leave the **Model** path blank to go back to the procedural body.
 
 ### Tuning notes
 
-- **Engine force** is per wheel, applied to all four. Very high values make the
-  truck wheelie and, past a point, backflip.
+
+- **Engine force** is per wheel, applied to all four. Drive is applied at the
+  contact patch, so the front wheels lift once the total exceeds
+  `weight x (COM-to-rear-axle) / (COM height)` — around 27kN on the stock
+  trucks. Stay meaningfully under it.
 - **Suspension stiffness** must be matched to mass. Cannon's spring force is
   `stiffness x compression x mass` against 2g of gravity, so a heavy truck on
   soft springs sits on its belly. The validator flags this.
@@ -97,5 +172,6 @@ so there is no mesh to model — a vehicle is a set of numbers.
 The coordinate conversion has unit tests that run without Blender:
 
 ```bash
-python3 blender/tests/test_convert.py
+python3 blender/tests/test_convert.py    # coordinate conversion
+python3 blender/tests/test_collision.py  # collider convexity check
 ```

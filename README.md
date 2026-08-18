@@ -4,9 +4,11 @@ A web arcade racer in the spirit of the 1996 PC original: low-resolution
 rendering, dithered 16-bit colour, fog you can taste, and trucks with far too
 much suspension travel.
 
-Everything you see is generated at runtime. There are no art assets — terrain,
-textures, trucks and scenery are all built from code, and tracks and vehicles
-are plain JSON. A Blender add-on (`blender/`) exports both formats.
+Tracks and vehicles are plain JSON, and everything has a procedural fallback —
+terrain, textures, trucks and scenery can all be generated from code, so a
+playable track is a few lines of data. When you want real geometry instead,
+the Blender add-on in `blender/` is the level and vehicle editor: model it,
+tag it, export it, and the game loads it.
 
 ```bash
 npm install
@@ -84,6 +86,7 @@ from fog density so nothing ever pops in.
 src/
   core/
     RetroRenderer.ts   low-res render target, dither + quantise post pass
+    Assets.ts          glTF loading, caching and retro material conversion
     Input.ts           keyboard + gamepad, mapped to named actions
     Textures.ts        procedural 64x64 surface/wall/sky textures
     Noise.ts           seeded PRNG and value noise
@@ -138,10 +141,34 @@ Also: `Body.applyForce`'s second argument is an offset *from the centre of
 mass*, not a world point. Passing a world position turns a small downforce into
 an enormous torque.
 
+## Authoring
+
+The Blender add-on in `blender/` is the editor for both tracks and vehicles.
+See [`blender/README.md`](blender/README.md) for the full workflow; the short
+version:
+
+**Levels.** Tag objects with a role — road spline, collider, scenery, wall,
+prop, spawn, checkpoint, terrain feature — and export. Tools generate start
+grids, checkpoint runs, barrier walls and roadside scatter along the road.
+Scenery meshes go out as a `.glb` beside the JSON.
+
+**Collision** is authored separately from what you see, and must be convex:
+the physics engine resolves boxes and convex hulls properly but not concave
+triangle meshes, which would silently let trucks through. The exporter checks
+this and refuses to write a collider that would fail.
+
+**Vehicles.** The reference rig draws what the simulation believes — chassis
+box, wheel positions through their full travel, ground plane, centre of mass —
+so you can model against it. Supply a body and one wheel; the game instances
+the wheel four times and places them from the physics rig. Or skip modelling
+entirely and use the procedural body.
+
+For where the tooling is going, see [`docs/engine-tools.md`](docs/engine-tools.md).
+
 ## Adding content
 
-Tracks and vehicles are data. Drop exported JSON into `public/content/` and
-list it in `public/content/manifest.json`:
+Tracks and vehicles are data. Drop exported JSON (and any `.glb`) into
+`public/content/` and list the JSON in `public/content/manifest.json`:
 
 ```json
 {
@@ -155,19 +182,20 @@ whose `id` matches a built-in replaces it — handy for iterating on a stock
 course. Loading is best-effort: a malformed file is skipped with a console
 warning rather than stopping the game.
 
-The two example files in `public/content/` show the expected shape.
-
-See [`blender/README.md`](blender/README.md) for the authoring tools.
+The examples in `public/content/` show the expected shape, including a
+vehicle that loads its body and wheels from a glTF file.
 
 ## Tests
 
 ```bash
-npm run typecheck                     # strict TypeScript
-python3 blender/tests/test_convert.py  # Blender <-> game coordinate conversion
+npm run typecheck                        # strict TypeScript
+python3 blender/tests/test_convert.py    # Blender <-> game coordinate conversion
+python3 blender/tests/test_collision.py  # collider convexity check
 ```
 
-The coordinate tests matter more than they look: the failure mode of a wrong
-axis is a silently mirrored track that seems fine until you drive it.
+Both suites cover things whose failure mode is invisible: a wrong axis gives a
+silently mirrored track, and a concave collider exports and loads perfectly
+before letting trucks drive through walls at speed.
 
 ## Steam
 

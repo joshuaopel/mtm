@@ -23,7 +23,7 @@ VERSION = 1
 def build_vehicle(scene):
     settings = scene.mtm_vehicle
 
-    return {
+    vehicle = {
         "format": FORMAT,
         "version": VERSION,
         "id": settings.vehicle_id.strip() or "untitled-truck",
@@ -78,6 +78,20 @@ def build_vehicle(scene):
             "lightBar": bool(settings.light_bar),
         },
     }
+
+    # Only reference a model when one has been exported. Without this the
+    # game falls back to the procedural body, which is the sane default.
+    if settings.model_path.strip():
+        vehicle["model"] = {
+            "url": settings.model_path.strip(),
+            "bodyNode": "MTM_Body",
+            "wheelNode": "MTM_Wheel",
+            "scale": round(settings.model_scale, 4),
+            "yawOffset": round(settings.model_yaw, 3),
+            "mirrorLeftWheels": bool(settings.mirror_left_wheels),
+        }
+
+    return vehicle
 
 
 def check_vehicle(vehicle):

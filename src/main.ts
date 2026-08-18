@@ -3,12 +3,11 @@ import * as THREE from 'three';
 import { RetroRenderer, type DetailLevel } from './core/RetroRenderer';
 import { Input } from './core/Input';
 import { EngineAudio } from './core/Audio';
-import { RaceSession } from './game/RaceSession';
+import { RaceSession, collectModelUrls } from './game/RaceSession';
 import { Showroom } from './game/Showroom';
 import { Hud } from './ui/Hud';
 import {
   ControlsScreen,
-  CreditsScreen,
   LoadingScreen,
   PauseScreen,
   ResultsScreen,
@@ -20,10 +19,11 @@ import type { Screen } from './ui/Screen';
 import { TRACKS } from './data/tracks';
 import { VEHICLES } from './data/vehicles';
 import { loadContent } from './game/ContentLoader';
+import { loadModels } from './core/Assets';
 import type { MTMTrack, MTMVehicle } from './game/formats';
 import type { Difficulty } from './game/AIDriver';
 
-type Mode = 'title' | 'tracks' | 'vehicles' | 'loading' | 'racing' | 'paused' | 'results' | 'controls' | 'credits';
+type Mode = 'title' | 'tracks' | 'vehicles' | 'loading' | 'racing' | 'paused' | 'results' | 'controls';
 
 /**
  * Application shell: owns the renderer, input, audio and the screen stack,
@@ -246,7 +246,6 @@ class Game {
       new TitleScreen({
         onRace: () => this.showTrackSelect(),
         onControls: () => this.showControls(),
-        onCredits: () => this.showCredits(),
       }),
       'title',
     );
@@ -268,10 +267,6 @@ class Game {
       }),
       'controls',
     );
-  }
-
-  private showCredits(): void {
-    this.setScreen(new CreditsScreen({ onBack: () => this.showTitle() }), 'credits');
   }
 
   private showTrackSelect(): void {
@@ -320,20 +315,35 @@ class Game {
     this.setScreen(loading, 'loading');
 
     await nextFrame();
-    loading.setProgress(0.15, 'BUILDING TERRAIN');
-    await nextFrame();
-
     this.disposeSession();
+
+    const setup = {
+      track: this.selectedTrack,
+      playerVehicle: this.selectedVehicle,
+      vehiclePool: this.vehicles,
+      opponents: this.opponents,
+      difficulty: this.difficulty,
+    };
+
+    // Models have to be in hand before the session is built, since that pass
+    // is synchronous. A model that fails to load is reported and skipped —
+    // the track or truck falls back to its procedural form.
+    const modelUrls = collectModelUrls(setup);
+    let models = new Map<string, THREE.Group>();
+    if (modelUrls.length > 0) {
+      loading.setProgress(0.1, `LOADING ${modelUrls.length} MODEL(S)`);
+      await nextFrame();
+      const loaded = await loadModels(modelUrls);
+      models = loaded.models;
+      for (const warning of loaded.warnings) console.warn(`[assets] ${warning}`);
+    }
+
+    loading.setProgress(0.45, 'BUILDING TERRAIN');
+    await nextFrame();
 
     try {
       this.session = new RaceSession(
-        {
-          track: this.selectedTrack,
-          playerVehicle: this.selectedVehicle,
-          vehiclePool: this.vehicles,
-          opponents: this.opponents,
-          difficulty: this.difficulty,
-        },
+        { ...setup, models },
         this.renderer.aspect,
         this.renderer.mirrorAspect,
       );

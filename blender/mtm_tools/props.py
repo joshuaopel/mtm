@@ -32,6 +32,17 @@ OBJECT_ROLES = [
     ("SPAWN", "Spawn Point", "A grid slot", "EMPTY_ARROWS", 5),
     ("CHECKPOINT", "Checkpoint", "Ordered gate", "MESH_PLANE", 6),
     ("FEATURE", "Terrain Feature", "Hill, crater or plateau", "SPHERECURVE", 7),
+    ("COLLIDER", "Collider", "Invisible collision volume", "MESH_ICOSPHERE", 8),
+    ("SCENERY", "Scenery Mesh", "Visual geometry exported to the track's .glb", "OUTLINER_OB_MESH", 9),
+]
+
+# Collision shapes the runtime can build. Concave meshes are absent on
+# purpose: cannon resolves boxes and convex hulls properly, but its triangle
+# meshes only collide reliably against spheres and rays, so a concave
+# collider would let truck bodies drive straight through it.
+COLLIDER_SHAPES = [
+    ("box", "Box", "Object bounds as an oriented box. Cheapest and most predictable"),
+    ("convex", "Convex Hull", "The mesh itself, which must be convex"),
 ]
 
 # Terrain is generated procedurally at runtime rather than baked from a mesh,
@@ -134,6 +145,14 @@ class MTMObjectProps(PropertyGroup):
 
     # --- spawns ---
     spawn_order: IntProperty(name="Grid Slot", default=0, min=0)
+
+    # --- colliders ---
+    collider_shape: EnumProperty(
+        name="Shape",
+        items=COLLIDER_SHAPES,
+        default="box",
+        description="How this volume is turned into collision",
+    )
 
     # --- terrain features ---
     # Radius comes from the object's own X scale so you can size a feature by
@@ -314,6 +333,32 @@ class MTMVehicleProps(PropertyGroup):
     roll_cage: BoolProperty(name="Roll Cage", default=True)
     stacks: BoolProperty(name="Exhaust Stacks", default=True)
     light_bar: BoolProperty(name="Light Bar", default=False)
+
+    # --- custom model ---
+    # Set by the model exporter. Leave blank to use the procedural body.
+    model_path: StringProperty(
+        name="Model",
+        default="",
+        description="Path to the exported .glb, relative to the game's site root. "
+        "Blank means the procedural body is used instead",
+    )
+    model_scale: FloatProperty(
+        name="Model Scale",
+        default=1.0,
+        min=0.01,
+        description="Uniform scale applied to the imported meshes",
+    )
+    model_yaw: FloatProperty(
+        name="Model Yaw",
+        default=0.0,
+        description="Degrees of extra yaw, for a body modelled facing the wrong way",
+    )
+    mirror_left_wheels: BoolProperty(
+        name="Mirror Left Wheels",
+        default=False,
+        description="Mirror the wheel on the left side. Right for offset rims and "
+        "directional tread, wrong for wheels with lettering",
+    )
 
     export_path: StringProperty(
         name="Export To",

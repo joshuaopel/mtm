@@ -141,6 +141,36 @@ export interface TrackScatter {
   solid?: boolean;
 }
 
+/**
+ * Collision geometry authored as real meshes rather than generated boxes.
+ *
+ * Only convex shapes are supported, and that is deliberate: cannon resolves
+ * box and convex-hull collisions properly, but its triangle meshes only
+ * collide reliably against spheres and rays. A concave collider would let
+ * truck bodies pass straight through ramps and buildings, so the Blender
+ * exporter splits concave collision volumes into convex pieces instead.
+ */
+export type ColliderShape =
+  | { kind: 'box'; size: Vec3 }
+  | {
+      kind: 'convex';
+      /** Flat xyz triples, in the collider's local space. */
+      vertices: number[];
+      /** Triangle indices into `vertices`. */
+      faces: number[][];
+    };
+
+export interface TrackCollider {
+  pos: Vec3;
+  /** Yaw in degrees about +Y. */
+  rotation?: number;
+  /** Pitch in degrees about the collider's own X axis, applied after yaw. */
+  pitch?: number;
+  shape: ColliderShape;
+  /** Free-text label, carried through for debugging. */
+  name?: string;
+}
+
 export interface TrackProp {
   kind: 'tree' | 'rock' | 'barrel' | 'cone' | 'sign' | 'tower' | 'crate' | 'arch';
   pos: Vec3;
@@ -184,8 +214,13 @@ export interface MTMTrack {
   checkpoints?: TrackCheckpoint[];
   /** Optional; auto-generated as a start grid behind checkpoint 0 when absent. */
   spawns?: { pos: Vec3; rotation: number }[];
-  /** Optional glTF of hand-modelled scenery, layered on top of the terrain. */
+  /**
+   * Optional glTF of hand-modelled scenery, layered on top of the terrain.
+   * Purely visual — give it collision with `colliders`.
+   */
   sceneryModel?: string;
+  /** Hand-authored collision volumes, independent of the scenery mesh. */
+  colliders?: TrackCollider[];
 }
 
 /* -------------------------------------------------------------------------
@@ -271,8 +306,40 @@ export interface MTMVehicle {
   stats: VehicleStats;
   physics: VehiclePhysics;
   look: VehicleLook;
-  /** Optional glTF replacing the procedural body mesh. */
-  model?: string;
+  /**
+   * Optional glTF replacing the procedural body and wheels. When absent, or
+   * when the file fails to load, the truck falls back to `look`.
+   */
+  model?: VehicleModel;
+}
+
+/**
+ * A modelled truck.
+ *
+ * The file needs one body node and one wheel node. The wheel is instanced
+ * four times and placed by the physics rig, so the model only has to contain
+ * a single wheel, modelled at the origin.
+ *
+ * Both meshes must be built around the chassis origin — the centre of mass —
+ * which is what the Blender reference rig exists to show you.
+ */
+export interface VehicleModel {
+  /** Path to the .glb, relative to the site root. */
+  url: string;
+  /** Node holding the body mesh. Defaults to "MTM_Body". */
+  bodyNode?: string;
+  /** Node holding a single wheel, modelled at the origin. Defaults to "MTM_Wheel". */
+  wheelNode?: string;
+  /** Uniform scale applied to the imported meshes. */
+  scale?: number;
+  /** Extra yaw in degrees, for a body modelled facing the wrong way. */
+  yawOffset?: number;
+  /**
+   * Mirror the wheel on the left-hand side of the truck. Right for
+   * asymmetric wheels (offset rims, directional tread), wrong for wheels
+   * carrying text that would come out backwards.
+   */
+  mirrorLeftWheels?: boolean;
 }
 
 /* -------------------------------------------------------------------------

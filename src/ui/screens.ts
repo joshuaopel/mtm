@@ -27,12 +27,11 @@ export class TitleScreen implements Screen {
   readonly root: HTMLElement;
   private menu: Menu;
 
-  constructor(actions: { onRace(): void; onControls(): void; onCredits(): void }) {
+  constructor(actions: { onRace(): void; onControls(): void }) {
     this.menu = new Menu();
     this.menu.setEntries([
       { label: 'START RACE', tag: 'ENTER', onSelect: actions.onRace },
       { label: 'CONTROLS', onSelect: actions.onControls },
-      { label: 'ABOUT', onSelect: actions.onCredits },
     ]);
 
     this.root = el('div', { class: 'screen' }, [
@@ -428,39 +427,6 @@ export class ControlsScreen implements Screen {
   handleInput(input: Input): void {
     this.menu.handleInput(input);
     if (input.pressed('back')) this.onBack();
-  }
-}
-
-export class CreditsScreen implements Screen {
-  readonly root: HTMLElement;
-  private onBack: () => void;
-
-  constructor(actions: { onBack(): void }) {
-    this.onBack = actions.onBack;
-    this.root = el('div', { class: 'screen' }, [
-      el('div', { class: 'title-plate' }, [el('h1', { text: 'ABOUT' })]),
-      el('div', { class: 'detail-pane bevel', style: 'max-width: 620px' }, [
-        el('div', { class: 'blurb' }, [
-          'A web tribute to the 1996 PC original: low-resolution rendering, ',
-          'dithered 16-bit colour, heavy fog and trucks with far too much ',
-          'suspension travel.',
-          el('br'),
-          el('br'),
-          'Everything you can see is generated at runtime — terrain, ',
-          'textures, trucks and scenery are all built from code, with no ',
-          'external art assets.',
-          el('br'),
-          el('br'),
-          'Tracks and vehicles load from JSON, and the Blender add-on in ',
-          '/blender exports both from the modelling tools.',
-        ]),
-      ]),
-      el('div', { class: 'hint' }, [el('b', { text: 'ESC' }), ' BACK']),
-    ]);
-  }
-
-  handleInput(input: Input): void {
-    if (input.pressed('back') || input.pressed('confirm')) this.onBack();
   }
 }
 

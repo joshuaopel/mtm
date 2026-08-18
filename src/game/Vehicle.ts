@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { clamp } from '../core/Noise';
-import { buildTruckMesh } from './TruckMesh';
+import { buildTruckMesh, buildTruckMeshFromModel } from './TruckMesh';
 import type { MTMVehicle } from './formats';
 
 export interface VehicleControls {
@@ -74,7 +74,12 @@ export class Vehicle {
    */
   stuckFor = 0;
 
-  constructor(definition: MTMVehicle, world: CANNON.World, wheelMaterial: CANNON.Material) {
+  constructor(
+    definition: MTMVehicle,
+    world: CANNON.World,
+    wheelMaterial: CANNON.Material,
+    model?: THREE.Group,
+  ) {
     this.definition = definition;
     this.world = world;
     const physics = definition.physics;
@@ -139,7 +144,9 @@ export class Vehicle {
 
     this.raycast.addToWorld(world);
 
-    const mesh = buildTruckMesh(definition);
+    // A modelled truck when one loaded, the procedural build otherwise.
+    const mesh =
+      (model ? buildTruckMeshFromModel(definition, model) : null) ?? buildTruckMesh(definition);
     this.bodyMesh = mesh.body;
     this.wheelMeshes = mesh.wheels;
     this.object.add(this.bodyMesh);

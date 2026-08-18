@@ -15,6 +15,7 @@ import bpy
 from bpy.types import Operator
 from mathutils import Vector
 
+from .collision import build_colliders
 from .convert import (
     box_yaw_degrees,
     convert_position,
@@ -218,6 +219,57 @@ def terrain_size(scene, road):
     return scene.mtm_track.terrain_size
 
 
+def export_scenery_gltf(context, json_path, problems):
+    """
+    Write SCENERY-tagged objects to a .glb beside the track JSON.
+
+    Blender's glTF exporter converts Z-up to the Y-up convention the game
+    uses, so the result needs no fixing up on the runtime side. Returns the
+    filename to reference from the JSON, or None when there is no scenery.
+    """
+    scene = context.scene
+    scenery = [o for o in collect(scene, "SCENERY") if o.type in {"MESH", "CURVE", "SURFACE"}]
+    if not scenery:
+        return None
+
+    base = os.path.splitext(os.path.basename(json_path))[0]
+    # Strip the ".mtmtrack" half of a ".mtmtrack.json" name.
+    if base.endswith(".mtmtrack"):
+        base = base[: -len(".mtmtrack")]
+    glb_name = f"{base}.glb"
+    glb_path = os.path.join(os.path.dirname(json_path), glb_name)
+
+    previous_selection = list(context.selected_objects)
+    previous_active = context.view_layer.objects.active
+
+    try:
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in scenery:
+            obj.select_set(True)
+        context.view_layer.objects.active = scenery[0]
+
+        bpy.ops.export_scene.gltf(
+            filepath=glb_path,
+            export_format="GLB",
+            use_selection=True,
+            export_apply=True,
+            export_yup=True,
+        )
+    except Exception as error:  # noqa: BLE001 - surfaced to the user below
+        problems.append(f"Scenery glTF export failed: {error}")
+        return None
+    finally:
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in previous_selection:
+            try:
+                obj.select_set(True)
+            except ReferenceError:
+                pass
+        context.view_layer.objects.active = previous_active
+
+    return glb_name
+
+
 def build_track(context, problems):
     scene = context.scene
     settings = scene.mtm_track
@@ -257,6 +309,10 @@ def build_track(context, problems):
         "walls": build_walls(scene),
         "props": build_props(scene),
     }
+
+    colliders = build_colliders(scene, depsgraph, collect, problems)
+    if colliders:
+        track["colliders"] = colliders
 
     if settings.author.strip():
         track["author"] = settings.author.strip()
@@ -315,6 +371,15 @@ class MTM_OT_export_track(Operator):
         if directory and not os.path.isdir(directory):
             os.makedirs(directory, exist_ok=True)
 
+        # Scenery goes out as a .glb beside the JSON, which then references it
+        # by filename so the pair can be copied into the game together.
+        scenery_problems = []
+        glb_name = export_scenery_gltf(context, path, scenery_problems)
+        for problem in scenery_problems:
+            self.report({"WARNING"}, problem)
+        if glb_name:
+            track["sceneryModel"] = f"content/{glb_name}"
+
         try:
             with open(path, "w", encoding="utf-8") as handle:
                 json.dump(track, handle, indent=2)
@@ -325,12 +390,14 @@ class MTM_OT_export_track(Operator):
         self.report(
             {"INFO"},
             "Exported {name}: {points} road points, {walls} walls, {props} props, "
-            "{features} terrain features -> {path}".format(
+            "{colliders} colliders, {features} features{scenery} -> {path}".format(
                 name=track["name"],
                 points=len(track["road"]["points"]),
                 walls=len(track["walls"]),
                 props=len(track["props"]),
+                colliders=len(track.get("colliders", [])),
                 features=len(track["terrain"]["features"]),
+                scenery=f", scenery {glb_name}" if glb_name else "",
                 path=os.path.basename(path),
             ),
         )
@@ -362,6 +429,11 @@ class MTM_OT_validate_track(Operator):
             self.report({"WARNING"}, "No walls and auto-barriers are off: nothing fences the course.")
         if not track["blurb"]:
             self.report({"WARNING"}, "No blurb set; the level select screen will look empty.")
+        if collect(scene, "SCENERY") and not track.get("colliders"):
+            self.report(
+                {"WARNING"},
+                "Scenery is tagged but nothing has a collider — trucks will drive through it.",
+            )
 
         self.report({"INFO"}, f"Track '{track['name']}' looks good.")
         return {"FINISHED"}
