@@ -81,8 +81,14 @@ export class Showroom {
     const built = buildTruckMesh(vehicle);
     const physics = vehicle.physics;
 
-    // Sit the truck on its wheels rather than on the chassis origin.
-    const rideHeight = physics.wheelRadius + physics.suspensionRest * 0.55 + physics.axleHeight;
+    // Sit the truck on its wheels at the height its own springs would settle
+    // at, using the same rest-compression formula as the running gear.
+    const restCompression = Math.min(
+      physics.maxSuspensionTravel,
+      19.6 / (4 * physics.suspensionStiffness),
+    );
+    const rideHeight =
+      physics.wheelRadius + (physics.suspensionRest - restCompression) - physics.axleHeight;
     built.body.position.y = rideHeight;
     this.turntable.add(built.body);
     this.current = built.body;

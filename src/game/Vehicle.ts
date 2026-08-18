@@ -28,6 +28,13 @@ const WHEEL_COUNT = 4;
 const STEERED_WHEELS = [0, 1];
 
 /**
+ * Below this speed (m/s) a truck counts as going nowhere. Set above walking
+ * pace so a genuinely slow crawl out of a rut doesn't read as stuck, but low
+ * enough that grinding along a wall does.
+ */
+const STUCK_SPEED = 2.0;
+
+/**
  * A driveable monster truck: cannon `RaycastVehicle` for the simulation,
  * a procedural mesh for the visuals, and an arcade control layer on top.
  *
@@ -60,6 +67,12 @@ export class Vehicle {
 
   /** Set when the truck has been on its roof long enough to need rescuing. */
   needsRescue = false;
+
+  /**
+   * Seconds spent going nowhere: wedged against scenery, beached on its roof,
+   * or facing a wall with the throttle buried. Drives the auto-respawn.
+   */
+  stuckFor = 0;
 
   constructor(definition: MTMVehicle, world: CANNON.World, wheelMaterial: CANNON.Material) {
     this.definition = definition;
@@ -355,6 +368,15 @@ export class Vehicle {
       this.upsideDownFor = 0;
     }
     this.needsRescue = this.upsideDownFor > 2.5;
+
+    // Separately, track going nowhere for any reason. A truck parked on the
+    // grid is not stuck, so the countdown hold is excluded.
+    const crawling = this.speed < STUCK_SPEED;
+    if (crawling && !this.controls.parked) {
+      this.stuckFor += dt;
+    } else {
+      this.stuckFor = 0;
+    }
   }
 
   /**
@@ -407,6 +429,7 @@ export class Vehicle {
     this.steerAngle = 0;
     this.upsideDownFor = 0;
     this.needsRescue = false;
+    this.stuckFor = 0;
 
     for (let i = 0; i < WHEEL_COUNT; i++) {
       this.raycast.applyEngineForce(0, i);

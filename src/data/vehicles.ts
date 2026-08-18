@@ -10,32 +10,50 @@ import { FORMAT_VERSION, VEHICLE_FORMAT, type MTMVehicle, type VehiclePhysics } 
  * these physics numbers by hand and should be updated alongside them.
  */
 
-/** Shared baseline; each truck overrides only what makes it distinct. */
+/**
+ * Shared baseline; each truck overrides only what makes it distinct.
+ *
+ * These are monster trucks, not rally cars, and the numbers say so. A 66-inch
+ * tyre puts the chassis about two metres up, the springs carry roughly a
+ * quarter-metre of squat at rest so the body visibly pitches and rolls, and
+ * there is over a metre of travel to absorb landings.
+ *
+ * The one number to be careful with is `engineForce`. Drive is applied at the
+ * contact patch, so the front wheels lift once total drive exceeds
+ * `weight x (COM-to-rear-axle) / (COM height)` — about 27kN here. Staying
+ * meaningfully under that gives a truck that squats and goes light at the
+ * front without looping itself onto its roof.
+ */
 const BASE: VehiclePhysics = {
-  mass: 1400,
-  chassisSize: [2.3, 1.0, 5.2],
+  mass: 1600,
+  chassisSize: [2.4, 1.0, 5.3],
   chassisOffset: [0, 0.1, 0],
-  wheelRadius: 0.66,
-  wheelWidth: 0.52,
-  frontAxle: [1.12, 1.6],
-  rearAxle: [1.12, -1.65],
-  axleHeight: -0.18,
-  suspensionRest: 0.62,
-  suspensionStiffness: 36,
-  suspensionDamping: 2.6,
-  suspensionCompression: 4.2,
-  maxSuspensionTravel: 0.6,
-  maxSuspensionForce: 140000,
-  frictionSlip: 2.7,
-  rollInfluence: 0.06,
-  engineForce: 5200,
-  brakeForce: 55,
-  handbrakeForce: 140,
-  maxSteer: 0.55,
-  steerRate: 2.6,
+  // 66-inch tyres, the class standard.
+  wheelRadius: 0.92,
+  wheelWidth: 0.62,
+  // Wide stance to offset the very high centre of mass.
+  frontAxle: [1.34, 1.72],
+  rearAxle: [1.34, -1.78],
+  axleHeight: -0.35,
+  suspensionRest: 1.0,
+  // Soft: rest compression is 19.6 / (4 x stiffness) = ~0.25m of visible squat.
+  suspensionStiffness: 20,
+  suspensionDamping: 2.1,
+  suspensionCompression: 3.2,
+  maxSuspensionTravel: 1.1,
+  maxSuspensionForce: 220000,
+  frictionSlip: 2.8,
+  // Enough body roll to feel the weight transfer, short of tipping over.
+  rollInfluence: 0.12,
+  engineForce: 4200,
+  brakeForce: 62,
+  handbrakeForce: 155,
+  maxSteer: 0.58,
+  steerRate: 2.4,
   highSpeedSteerFactor: 0.42,
-  topSpeed: 42,
-  downforce: 4.5,
+  topSpeed: 38,
+  // Light: heavy downforce would pin the suspension flat and kill the wallow.
+  downforce: 2.5,
   airControl: 2.6,
 };
 
@@ -90,17 +108,20 @@ export const VEHICLES: MTMVehicle[] = [
     'Two tonnes of stubborn. Slow to wind up, but it holds a line through ruts that spit lighter trucks into the scenery.',
     { speed: 5, accel: 4, grip: 9, weight: 9, suspension: 8, toughness: 9 },
     {
-      mass: 2050,
-      engineForce: 6200,
-      topSpeed: 38,
-      frictionSlip: 3.2,
-      maxSteer: 0.48,
-      steerRate: 2.1,
-      suspensionStiffness: 44,
-      maxSuspensionForce: 190000,
-      brakeForce: 70,
-      downforce: 6.0,
-      airControl: 1.9,
+      mass: 2350,
+      engineForce: 5200,
+      topSpeed: 35,
+      frictionSlip: 3.3,
+      maxSteer: 0.5,
+      steerRate: 2.0,
+      // Stiffer to carry the extra tonne without lying on its bump stops.
+      suspensionStiffness: 28,
+      maxSuspensionForce: 300000,
+      maxSuspensionTravel: 1.0,
+      rollInfluence: 0.09,
+      brakeForce: 78,
+      downforce: 3.4,
+      airControl: 1.8,
     },
     {
       style: 'hauler',
@@ -122,17 +143,20 @@ export const VEHICLES: MTMVehicle[] = [
     'Built for the jumps. Soft, long-travel springs soak up landings that would fold anything else, and it steers in mid-air.',
     { speed: 7, accel: 7, grip: 5, weight: 4, suspension: 10, toughness: 5 },
     {
-      mass: 1250,
-      suspensionRest: 0.78,
-      maxSuspensionTravel: 0.85,
-      suspensionStiffness: 30,
-      suspensionDamping: 2.2,
-      wheelRadius: 0.72,
-      engineForce: 5000,
-      topSpeed: 44,
-      airControl: 4.4,
-      frictionSlip: 2.5,
-      rollInfluence: 0.09,
+      mass: 1420,
+      suspensionRest: 1.25,
+      // Almost a metre and a half of travel: it soaks up landings that fold
+      // everything else in the field.
+      maxSuspensionTravel: 1.45,
+      suspensionStiffness: 16,
+      suspensionDamping: 1.8,
+      suspensionCompression: 2.8,
+      wheelRadius: 1.0,
+      engineForce: 3900,
+      topSpeed: 39,
+      airControl: 4.2,
+      frictionSlip: 2.6,
+      rollInfluence: 0.16,
     },
     {
       style: 'buggy',
@@ -153,17 +177,18 @@ export const VEHICLES: MTMVehicle[] = [
     'All engine, no manners. Ferocious off the line and happy to move anything that gets in the way, including you.',
     { speed: 8, accel: 9, grip: 5, weight: 7, suspension: 5, toughness: 8 },
     {
-      mass: 1750,
-      engineForce: 7400,
-      topSpeed: 46,
-      frictionSlip: 2.5,
-      maxSteer: 0.5,
-      steerRate: 2.4,
-      suspensionStiffness: 42,
-      maxSuspensionTravel: 0.48,
-      handbrakeForce: 180,
-      downforce: 5.5,
-      rollInfluence: 0.05,
+      mass: 1950,
+      // The most drive in the field, and enough to make the nose go light.
+      engineForce: 5600,
+      topSpeed: 41,
+      frictionSlip: 2.6,
+      maxSteer: 0.52,
+      steerRate: 2.3,
+      suspensionStiffness: 26,
+      maxSuspensionTravel: 0.9,
+      handbrakeForce: 200,
+      downforce: 3.6,
+      rollInfluence: 0.1,
     },
     {
       style: 'muscle',
@@ -184,16 +209,19 @@ export const VEHICLES: MTMVehicle[] = [
     'Feathery and quick to change direction. Point it early, stay off the kerbs, and it will out-corner everything here.',
     { speed: 6, accel: 7, grip: 8, weight: 2, suspension: 6, toughness: 3 },
     {
-      mass: 1050,
-      engineForce: 4300,
-      topSpeed: 40,
-      maxSteer: 0.66,
-      steerRate: 3.4,
+      mass: 1180,
+      engineForce: 3300,
+      topSpeed: 37,
+      maxSteer: 0.7,
+      steerRate: 3.3,
       highSpeedSteerFactor: 0.55,
-      frictionSlip: 3.0,
-      suspensionStiffness: 32,
-      rollInfluence: 0.1,
-      airControl: 3.4,
+      frictionSlip: 3.1,
+      suspensionStiffness: 15,
+      maxSuspensionTravel: 1.15,
+      wheelRadius: 0.86,
+      // Light and tall: it changes direction instantly and leans hard doing it.
+      rollInfluence: 0.19,
+      airControl: 3.3,
     },
     {
       style: 'flatnose',
@@ -214,17 +242,21 @@ export const VEHICLES: MTMVehicle[] = [
     'Geared for the long straights and nothing else. Brake early, or the first real corner will be the last thing it sees.',
     { speed: 10, accel: 8, grip: 4, weight: 5, suspension: 4, toughness: 5 },
     {
-      mass: 1450,
-      engineForce: 6000,
-      topSpeed: 54,
-      maxSteer: 0.44,
-      steerRate: 2.2,
+      mass: 1650,
+      engineForce: 4600,
+      topSpeed: 48,
+      maxSteer: 0.46,
+      steerRate: 2.1,
       highSpeedSteerFactor: 0.3,
-      frictionSlip: 2.4,
-      suspensionStiffness: 40,
-      maxSuspensionTravel: 0.5,
-      downforce: 8.0,
-      brakeForce: 50,
+      frictionSlip: 2.5,
+      // Stiff and low-travel for stability at speed, which costs it dearly
+      // over the rough stuff.
+      suspensionStiffness: 27,
+      maxSuspensionTravel: 0.8,
+      suspensionRest: 0.9,
+      rollInfluence: 0.08,
+      downforce: 5.0,
+      brakeForce: 56,
     },
     {
       style: 'crewcab',

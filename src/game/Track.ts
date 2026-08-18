@@ -7,6 +7,21 @@ import { Terrain } from './Terrain';
 import { buildProp } from './Props';
 import type { MTMTrack, TrackCheckpoint, TrackWall } from './formats';
 
+/**
+ * How far above the road a truck is placed.
+ *
+ * Monster trucks stand roughly 2.3m to their centre of mass, so these clear
+ * the tallest truck in the roster with a little slack. Spawning too low drops
+ * the chassis inside the terrain, and the solver ejects it violently.
+ */
+const SPAWN_LIFT = 2.8;
+/** Respawns get extra room, since the truck is usually wedged on something. */
+const RESPAWN_LIFT = 3.3;
+
+function clampUnit(value: number): number {
+  return value < -1 ? -1 : value > 1 ? 1 : value;
+}
+
 export interface Checkpoint {
   index: number;
   position: THREE.Vector3;
@@ -223,6 +238,10 @@ export class Track {
           // Overlap segments a little so corners don't open up gaps.
           size: [barriers.thickness, barriers.height, barriers.spacing * 1.12],
           rotation: this.road.headingAt(i) * (180 / Math.PI),
+          // Follow the gradient. A positive tangent.y means the road climbs,
+          // and the barrier's +Z end has to rise with it — which is a
+          // negative rotation about its own X axis.
+          pitch: -Math.asin(clampUnit(tangent.y)) * (180 / Math.PI),
           material: barriers.material,
           invisible: barriers.invisible,
         });
@@ -236,6 +255,7 @@ export class Track {
 
     for (const wall of walls) {
       const yaw = (wall.rotation ?? 0) * (Math.PI / 180);
+      const pitch = (wall.pitch ?? 0) * (Math.PI / 180);
       const half = new CANNON.Vec3(wall.size[0] / 2, wall.size[1] / 2, wall.size[2] / 2);
 
       const body = new CANNON.Body({
@@ -244,7 +264,8 @@ export class Track {
         material: this.groundMaterial,
       });
       body.position.set(wall.pos[0], wall.pos[1], wall.pos[2]);
-      body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yaw);
+      // YXZ: yaw first, then pitch about the wall's own long axis.
+      body.quaternion.setFromEuler(pitch, yaw, 0, 'YXZ');
       this.world.addBody(body);
 
       if (wall.invisible) continue;
@@ -267,7 +288,8 @@ export class Track {
 
       const mesh = new THREE.Mesh(geometry, undefined as unknown as THREE.Material);
       mesh.position.set(wall.pos[0], wall.pos[1], wall.pos[2]);
-      mesh.rotation.y = yaw;
+      mesh.rotation.order = 'YXZ';
+      mesh.rotation.set(pitch, yaw, 0);
 
       const list = byMaterial.get(key);
       if (list) list.push(mesh);
@@ -486,7 +508,7 @@ export class Track {
       const position = point
         .clone()
         .addScaledVector(right, column * columnSpacing)
-        .setY(point.y + 1.6);
+        .setY(point.y + SPAWN_LIFT);
 
       this.spawns.push({ position, heading: Math.atan2(tangent.x, tangent.z) });
     }
@@ -499,7 +521,7 @@ export class Track {
   respawnNear(x: number, z: number): SpawnPoint {
     const query = this.road.closestTo(x, z);
     return {
-      position: new THREE.Vector3(query.point.x, query.point.y + 2.2, query.point.z),
+      position: new THREE.Vector3(query.point.x, query.point.y + RESPAWN_LIFT, query.point.z),
       heading: Math.atan2(query.tangent.x, query.tangent.z),
     };
   }

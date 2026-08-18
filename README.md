@@ -25,7 +25,45 @@ npm run build    # typecheck + production bundle into dist/
 | Reset truck | R | Y |
 | Change camera | C | RB |
 | Look back | B | LB |
+| Toggle rear-view mirror | M | Select |
 | Pause | Esc | Start |
+
+## Trucks and terrain
+
+These are monster trucks and the numbers say so: 66-inch tyres, a chassis about
+two metres up, over a metre of suspension travel, and soft enough springs that
+roughly a quarter-metre of squat is visible as the body pitches and rolls. The
+mesh matches — beam axles slung under a lifted body, with coil-overs and radius
+rods bridging the gap.
+
+The tuning constraint worth knowing: drive is applied at the contact patch, so
+the front wheels lift once total drive exceeds `weight x (COM-to-rear-axle) /
+(COM height)`, about 27kN on the stock trucks. Staying under it gives a truck
+that squats and goes light at the front without looping onto its roof.
+
+Courses climb and drop tens of metres, and each carries table-top jumps built
+from tightly-spaced spline points — widely-spaced points can only ever produce
+rolling hills, because the Catmull-Rom re-spline smooths everything between
+them. Verges are wide so the elevation eases out into the landscape instead of
+leaving the road on a wall of dirt, and barrier walls pitch to follow the
+gradient rather than staying level while the ground slopes past.
+
+## The rear-view mirror
+
+A second pass over the scene from a backward-facing camera above the cab,
+rendered into its own small target and composited at the top of the screen,
+flipped horizontally like real glass. It costs what its pixel count costs,
+which is why the target is 256x80; toggle it with **M** if you want the frames
+back. It always looks astern of the truck, independent of the chase camera, so
+holding "look back" doesn't aim it forwards.
+
+## Getting unstuck
+
+Any truck — player or AI — that goes nowhere for five seconds is put back on
+the racing line facing the right way. Inverted trucks are picked up sooner, at
+two and a half. It applies to the whole field deliberately: an AI truck wedged
+against a barrier is both a dead opponent and a permanent obstacle for
+everyone else.
 
 ## The retro look
 

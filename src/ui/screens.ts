@@ -368,6 +368,7 @@ export class ControlsScreen implements Screen {
       ['RESET TRUCK', 'R / Y'],
       ['CHANGE CAMERA', 'C / RB'],
       ['LOOK BACK', 'B / LB'],
+      ['REAR-VIEW MIRROR', 'M / SELECT'],
       ['PAUSE', 'ESC / START'],
     ];
 

@@ -15,6 +15,7 @@ export type Action =
   | 'reset'
   | 'camera'
   | 'lookBack'
+  | 'mirror'
   | 'pause'
   | 'confirm'
   | 'back'
@@ -34,6 +35,7 @@ const KEY_MAP: Record<string, Action[]> = {
   KeyR: ['reset'],
   KeyC: ['camera'],
   KeyB: ['lookBack'],
+  KeyM: ['mirror'],
   Escape: ['pause', 'back'],
   Enter: ['confirm'],
   NumpadEnter: ['confirm'],
@@ -48,6 +50,7 @@ const PAD_BUTTON_MAP: Record<number, Action[]> = {
   3: ['reset'], // Y
   4: ['lookBack'], // LB
   5: ['camera'], // RB
+  8: ['mirror'], // Back/Select
   6: ['brake'], // LT (digital fallback)
   7: ['throttle'], // RT (digital fallback)
   9: ['pause'], // Start

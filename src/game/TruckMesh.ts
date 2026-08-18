@@ -424,6 +424,100 @@ export function buildWheel(radius: number, width: number, rimColor: string): THR
   return group;
 }
 
+/** A cylinder stretched between two points, for shocks and links. */
+function strut(
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  radius: number,
+  material: THREE.Material,
+): THREE.Mesh {
+  const direction = new THREE.Vector3().subVectors(to, from);
+  const length = direction.length();
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 6), material);
+  mesh.position.copy(from).addScaledVector(direction, 0.5);
+  // CylinderGeometry runs along +Y; aim it along the strut.
+  mesh.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    direction.normalize(),
+  );
+  return mesh;
+}
+
+/**
+ * The bit that makes it a monster truck: solid beam axles slung well below a
+ * lifted body, with visible coil-overs and radius rods bridging the gap.
+ *
+ * Geometry is placed at the suspension's resting height so it lines up with
+ * where the wheels actually sit. The parts don't articulate — at this
+ * resolution and speed the silhouette is doing all the work.
+ */
+function addRunningGear(body: THREE.Group, vehicle: MTMVehicle, p: Palette): void {
+  const physics = vehicle.physics;
+
+  // Where the wheel centres settle under the truck's own weight. Mirrors
+  // cannon's spring equation: force = stiffness x compression x mass, with
+  // four wheels carrying 2g.
+  const restCompression = Math.min(
+    physics.maxSuspensionTravel,
+    19.6 / (4 * physics.suspensionStiffness),
+  );
+  const axleY = physics.axleHeight - (physics.suspensionRest - restCompression);
+
+  // Chassis rails tucked under the body.
+  const railY = -0.42;
+  for (const x of [-0.85, 0.85]) {
+    body.add(box(0.2, 0.24, BODY_LENGTH * 0.94, p.dark, x, railY, 0));
+  }
+
+  const axles: [number, number][] = [
+    [physics.frontAxle[0], physics.frontAxle[1]],
+    [physics.rearAxle[0], physics.rearAxle[1]],
+  ];
+
+  for (const [halfTrack, z] of axles) {
+    // Beam axle spanning the full track width.
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.11, halfTrack * 2, 6),
+      p.dark,
+    );
+    beam.rotation.z = Math.PI / 2;
+    beam.position.set(0, axleY, z);
+    body.add(beam);
+
+    // Differential housing.
+    const pumpkin = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), p.trim);
+    pumpkin.position.set(0, axleY, z);
+    body.add(pumpkin);
+
+    for (const side of [-1, 1]) {
+      // Coil-over from the chassis rail down and out to the axle end.
+      const top = new THREE.Vector3(side * 0.85, railY + 0.1, z);
+      const bottom = new THREE.Vector3(side * halfTrack * 0.82, axleY, z);
+      body.add(strut(top, bottom, 0.07, p.chrome));
+
+      // Spring wrapped around it, drawn as a fatter, shorter sleeve.
+      const springTop = top.clone().lerp(bottom, 0.15);
+      const springBottom = top.clone().lerp(bottom, 0.85);
+      body.add(strut(springTop, springBottom, 0.13, p.accent));
+
+      // Radius rod running fore-and-aft to locate the axle.
+      const rodBody = new THREE.Vector3(side * 0.8, railY - 0.05, z * 0.35);
+      const rodAxle = new THREE.Vector3(side * halfTrack * 0.6, axleY + 0.05, z);
+      body.add(strut(rodBody, rodAxle, 0.05, p.dark));
+    }
+  }
+
+  // Driveshaft between the axles.
+  body.add(
+    strut(
+      new THREE.Vector3(0, axleY + 0.05, physics.frontAxle[1]),
+      new THREE.Vector3(0, axleY + 0.05, physics.rearAxle[1]),
+      0.06,
+      p.chrome,
+    ),
+  );
+}
+
 export interface TruckMesh {
   /** Chassis visual, positioned by the physics body each frame. */
   body: THREE.Group;
@@ -443,12 +537,7 @@ export function buildTruckMesh(vehicle: MTMVehicle): TruckMesh {
   if (look.stacks) addStacks(body, p);
   if (look.lightBar) addLightBar(body, p);
 
-  // Chassis rails, tying the body down to the axles visually.
-  for (const x of [-0.8, 0.8]) {
-    body.add(box(0.22, 0.22, BODY_LENGTH * 0.92, p.dark, x, -0.45, 0));
-  }
-  body.add(box(1.9, 0.2, 0.24, p.dark, 0, -0.45, vehicle.physics.frontAxle[1]));
-  body.add(box(1.9, 0.2, 0.24, p.dark, 0, -0.45, vehicle.physics.rearAxle[1]));
+  addRunningGear(body, vehicle, p);
 
   const scale = look.scale ?? 1;
   body.scale.setScalar(scale);

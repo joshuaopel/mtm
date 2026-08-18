@@ -335,6 +335,7 @@ class Game {
           difficulty: this.difficulty,
         },
         this.renderer.aspect,
+        this.renderer.mirrorAspect,
       );
     } catch (error) {
       console.error('failed to build race', error);
@@ -403,7 +404,11 @@ class Game {
       this.screen?.update?.(frameTime);
       if (this.mode === 'paused' && this.session) {
         // Keep the frozen race visible behind the pause menu.
-        this.renderer.render(this.session.scene, this.session.camera.camera);
+        this.renderer.render(
+          this.session.scene,
+          this.session.camera.camera,
+          this.session.camera.mirrorCamera,
+        );
         requestAnimationFrame(this.frame);
         return;
       }
@@ -426,11 +431,19 @@ class Game {
     }
     if (this.input.pressed('reset')) session.rescuePlayer();
     if (this.input.pressed('camera')) session.camera.cycleMode();
+    if (this.input.pressed('mirror')) {
+      this.renderer.setMirrorEnabled(!this.renderer.isMirrorEnabled);
+      session.flash(this.renderer.isMirrorEnabled ? 'MIRROR ON' : 'MIRROR OFF');
+    }
     session.camera.setLookingBack(this.input.down('lookBack'));
 
     session.update(frameTime, this.input, this.audio);
     this.hud.update(session);
-    this.renderer.render(session.scene, session.camera.camera);
+    this.renderer.render(
+      session.scene,
+      session.camera.camera,
+      session.camera.mirrorCamera,
+    );
 
     if (session.race.phase === 'finished') {
       this.audio.idle();

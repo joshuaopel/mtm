@@ -89,6 +89,14 @@ export interface TrackWall {
   /** Yaw in degrees about +Y. */
   rotation?: number;
   /**
+   * Pitch in degrees about the wall's own X axis, applied after yaw.
+   *
+   * Lets a barrier follow a climbing or falling road. Without it a long run
+   * of walls on a gradient stays horizontal while the ground slopes past,
+   * and the fence breaks up into a line of floating wedges.
+   */
+  pitch?: number;
+  /**
    * Invisible walls keep the player on course without cluttering the scene —
    * the classic way to fence a canyon.
    */

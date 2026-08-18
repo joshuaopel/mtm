@@ -15,6 +15,15 @@ const FIXED_STEP = 1 / 60;
 /** Never simulate more than this much time in one frame, or a stall spirals. */
 const MAX_FRAME_TIME = 0.1;
 
+/**
+ * How long a truck may go nowhere before it is put back on the track.
+ *
+ * Long enough that the AI's own reverse-out manoeuvre (which fires at ~1.8s)
+ * gets a fair chance to free the truck first, so a respawn only happens when
+ * recovery has genuinely failed.
+ */
+const STUCK_RESPAWN_SECONDS = 5;
+
 const AI_NAMES = [
   'RAZORBACK', 'STOMPER', 'HALF-TON', 'BONEYARD',
   'DIRT NAP', 'ROADKILL', 'THUNDERHEAD', 'GRIT',
@@ -54,11 +63,12 @@ export class RaceSession {
   private previousVerticalSpeed = 0;
   paused = false;
 
-  constructor(setup: RaceSetup, audioAspect: number) {
+  constructor(setup: RaceSetup, viewAspect: number, mirrorAspect = 3.2) {
     this.setup = setup;
     this.track = new Track(setup.track);
     this.race = new Race(this.track, setup.track.laps);
-    this.camera = new ChaseCamera(audioAspect, this.track.viewDistance);
+    this.camera = new ChaseCamera(viewAspect, this.track.viewDistance, mirrorAspect);
+    this.camera.setGroundProbe((x, z) => this.track.terrain.heightAt(x, z));
 
     const wheelMaterial = new CANNON.Material('wheel');
     const contact = new CANNON.ContactMaterial(this.track.groundMaterial, wheelMaterial, {
@@ -178,18 +188,34 @@ export class RaceSession {
     this.handleRescues();
   }
 
-  /** Put trucks back on the road when they end up stranded or inverted. */
+  /**
+   * Put trucks back on the road when they end up stranded, inverted, or
+   * simply going nowhere.
+   *
+   * Applies to the whole field, not just the player: an AI truck wedged
+   * against a barrier for the rest of the race is both a dead opponent and a
+   * permanent obstacle for everyone else.
+   */
   private handleRescues(): void {
+    // Nothing to rescue before the flag drops or after it falls.
+    if (this.race.phase !== 'racing') return;
+
     for (const racer of this.race.racers) {
+      if (racer.finished) continue;
+
       const vehicle = racer.vehicle;
       const belowWorld = vehicle.position.y < -40;
-      if (!vehicle.needsRescue && !belowWorld) continue;
+      const stuck = vehicle.stuckFor >= STUCK_RESPAWN_SECONDS;
+      if (!vehicle.needsRescue && !belowWorld && !stuck) continue;
 
+      // Snap to the nearest point on the racing line, facing the right way,
+      // and lifted clear of the surface.
       const spawn = this.track.respawnNear(vehicle.position.x, vehicle.position.z);
       vehicle.reset(spawn.position, spawn.heading);
+
       if (racer.isPlayer) {
         this.camera.reset();
-        this.flash('RECOVERED');
+        this.flash(stuck && !vehicle.needsRescue ? 'UNSTUCK' : 'RECOVERED');
       }
     }
   }
