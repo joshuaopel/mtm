@@ -645,6 +645,26 @@ export class Track {
   }
 
   /**
+   * Put a truck back at a gate it has already passed.
+   *
+   * Used by the out-of-bounds reset: dropping someone at the nearest point on
+   * the racing line would hand them whatever distance they covered while off
+   * course, so the reset has to go back to ground they have actually earned.
+   */
+  respawnAtCheckpoint(index: number): SpawnPoint {
+    const gate = this.checkpoints[((index % this.checkpoints.length) + this.checkpoints.length) % this.checkpoints.length];
+    if (!gate) return this.respawnNear(0, 0);
+    return {
+      position: new THREE.Vector3(
+        gate.position.x,
+        gate.position.y + RESPAWN_LIFT,
+        gate.position.z,
+      ),
+      heading: Math.atan2(gate.forward.x, gate.forward.z),
+    };
+  }
+
+  /**
    * Where a stuck truck should be put back. Snaps to the road, faces the
    * racing direction, and lifts clear of the surface.
    */

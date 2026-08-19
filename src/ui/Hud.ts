@@ -20,6 +20,8 @@ export class Hud {
   private standingsBox: HTMLElement;
   private centreMessage: HTMLElement;
   private wrongWay: HTMLElement;
+  private offCourse: HTMLElement;
+  private offCourseCount: HTMLElement;
   private gearHint: HTMLElement;
 
   private standingsSignature = '';
@@ -34,10 +36,16 @@ export class Hud {
     this.standingsBox = el('div', { class: 'standings' });
     this.centreMessage = el('div', { class: 'center-msg' });
     this.wrongWay = el('div', { class: 'wrongway', text: 'WRONG WAY' });
+    this.offCourseCount = el('span', { class: 'count', text: '5' });
+    this.offCourse = el('div', { class: 'offcourse' }, [
+      el('div', { text: 'OFF COURSE' }),
+      el('div', { class: 'sub' }, ['RETURN TO THE TRACK', this.offCourseCount]),
+    ]);
     this.gearHint = el('div', { class: 'unit', text: 'MPH' });
 
     this.wrongWay.style.display = 'none';
     this.centreMessage.style.display = 'none';
+    this.offCourse.style.display = 'none';
 
     this.root = el('div', { class: 'hud' }, [
       el('div', { class: 'box tl' }, [
@@ -59,6 +67,7 @@ export class Hud {
       el('div', { class: 'box br speedo' }, [this.speedValue, this.gearHint]),
       this.centreMessage,
       this.wrongWay,
+      this.offCourse,
     ]);
   }
 
@@ -86,8 +95,37 @@ export class Hud {
     this.updateStandings(race);
     this.updateCentreMessage(session);
 
-    const showWrongWay = player.wrongWay && race.phase === 'racing';
+    this.updateOffCourse(session);
+
+    // Off course already owns the centre of the screen, and two warnings
+    // stacked on top of each other reads as neither.
+    const showWrongWay =
+      player.wrongWay && race.phase === 'racing' && player.offTrackFor <= 0;
     this.wrongWay.style.display = showWrongWay ? '' : 'none';
+  }
+
+  /**
+   * The return-to-track countdown.
+   *
+   * Only shown once the timer is meaningfully running: the recovery ramp
+   * leaves a fraction of a second on the clock after a brief excursion, and
+   * flashing a warning for that is worse than not warning at all.
+   */
+  private updateOffCourse(session: RaceSession): void {
+    const player = session.race.player;
+    const elapsed = player?.offTrackFor ?? 0;
+    const showing = session.race.phase === 'racing' && elapsed > 0.35;
+
+    if (!showing) {
+      if (this.offCourse.style.display !== 'none') this.offCourse.style.display = 'none';
+      return;
+    }
+
+    const remaining = Math.max(0, session.boundsSeconds - elapsed);
+    this.offCourse.style.display = '';
+    // Ceiling, so the last whole second is shown as "1" rather than "0".
+    this.setText(this.offCourseCount, String(Math.ceil(remaining)));
+    this.offCourse.classList.toggle('urgent', remaining <= 2);
   }
 
   private updateStandings(race: Race): void {

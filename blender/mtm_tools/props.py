@@ -229,6 +229,24 @@ class MTMTrackProps(PropertyGroup):
         subtype="DISTANCE",
         description="How far past the road edge the terrain blends back to its natural height",
     )
+    bounds_margin: FloatProperty(
+        name="Off-Course Margin",
+        default=22.0,
+        min=0.0,
+        subtype="DISTANCE",
+        description="How far past the shoulder a truck may stray before the "
+        "off-course countdown starts. Measured from the edge of the shoulder, "
+        "so the drivable width is the road plus the shoulder plus this",
+    )
+    bounds_seconds: FloatProperty(
+        name="Off-Course Time",
+        default=5.0,
+        min=1.0,
+        max=30.0,
+        subtype="TIME_ABSOLUTE",
+        description="Seconds off course before the truck is put back at the "
+        "last checkpoint it passed",
+    )
     road_spacing: FloatProperty(
         name="Point Spacing",
         default=12.0,

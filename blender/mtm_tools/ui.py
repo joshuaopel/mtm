@@ -60,6 +60,11 @@ class MTM_PT_track_road(MTMPanel, Panel):
         box.prop(settings, "road_closed")
 
         box = layout.box()
+        box.label(text="Course Limits", icon="MOD_TIME")
+        box.prop(settings, "bounds_margin")
+        box.prop(settings, "bounds_seconds")
+
+        box = layout.box()
         box.label(text="Terrain", icon="MESH_GRID")
         box.prop(settings, "terrain_source", expand=True)
 

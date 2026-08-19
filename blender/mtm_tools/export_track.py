@@ -404,6 +404,10 @@ def build_track(context, problems):
             "features": build_features(scene),
         },
         "road": road,
+        "bounds": {
+            "margin": round(settings.bounds_margin, 3),
+            "seconds": round(settings.bounds_seconds, 2),
+        },
         "walls": build_walls(scene),
         "props": build_props(scene),
     }

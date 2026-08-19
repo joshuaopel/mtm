@@ -60,6 +60,12 @@ around.
 - **Road Width** and **Shoulder** set the flattened corridor. The shoulder is
   the blend from road level back to the landscape, so a wide shoulder gives
   forgiving run-off and a narrow one gives you a ledge.
+- **Off-Course Margin** and **Off-Course Time** (Course Limits, Road panel) are
+  the course boundary. A truck is off course once it is further from the
+  centreline than half the road width plus the shoulder plus the margin, and
+  after the time runs out it is put back at the last checkpoint it passed. The
+  margin is measured from the *edge of the shoulder*, so a track with a wide
+  shoulder is already forgiving before the margin is counted.
 
 ## Ground, option 1: generated
 
@@ -176,7 +182,10 @@ meant it.
 - **Auto Barriers** on (default) has the game fence the course at load time —
   cheap, and the file stays small. **Generate Barrier Walls** bakes them as real
   objects you can then edit, and turns auto-barriers off so it isn't fenced
-  twice.
+  twice. Most courses read better without any: the off-course clock keeps
+  people honest, and a line of scattered `flag` props marks the edge without
+  bouncing anyone back onto the racing line. That is how every stock circuit
+  except Slag Works is built.
 - **Scatter Props** dresses the roadside. **Drop To Terrain** settles anything
   selected onto the ground.
 - Model your own geometry, tag it **Scenery Mesh**, and give it a collider.

@@ -24,6 +24,12 @@ export interface Racer {
   position: number;
 
   wrongWay: boolean;
+
+  /**
+   * Seconds spent outside the course bounds. Zero whenever the racer is on
+   * course, so the HUD can read it directly as a countdown.
+   */
+  offTrackFor: number;
 }
 
 export type RacePhase = 'countdown' | 'racing' | 'finished';
@@ -59,7 +65,7 @@ export class Race {
     this.totalLaps = totalLaps;
   }
 
-  add(racer: Omit<Racer, 'lap' | 'nextCheckpoint' | 'progress' | 'lapTimes' | 'currentLapStart' | 'bestLap' | 'finished' | 'finishTime' | 'position' | 'wrongWay'>): Racer {
+  add(racer: Omit<Racer, 'lap' | 'nextCheckpoint' | 'progress' | 'lapTimes' | 'currentLapStart' | 'bestLap' | 'finished' | 'finishTime' | 'position' | 'wrongWay' | 'offTrackFor'>): Racer {
     const full: Racer = {
       ...racer,
       lap: 0,
@@ -73,6 +79,7 @@ export class Race {
       finishTime: null,
       position: this.racers.length + 1,
       wrongWay: false,
+      offTrackFor: 0,
     };
     this.racers.push(full);
     return full;

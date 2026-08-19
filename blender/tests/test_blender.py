@@ -315,6 +315,15 @@ class TestFullExport(BlenderCase):
         self.assertNotIn("heightmap", track["terrain"])
         self.assertGreater(len(track["road"]["points"]), 20)
 
+    def test_course_limits_are_exported(self):
+        bpy.ops.mtm.new_track(radius=200, points=10, preview=False)
+        self.settings.bounds_margin = 17.5
+        self.settings.bounds_seconds = 8.0
+        track = self.export()
+
+        self.assertAlmostEqual(track["bounds"]["margin"], 17.5, places=3)
+        self.assertAlmostEqual(track["bounds"]["seconds"], 8.0, places=2)
+
     def test_sculpted_and_painted_track_carries_heights_and_weights(self):
         from mtm_tools import paint
 

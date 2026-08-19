@@ -235,6 +235,30 @@ export interface TrackWall {
  * declare the intent and the runtime lays them out along the spline. The
  * Blender exporter emits the same structure when a road is marked "fenced".
  */
+/**
+ * The soft edge of the course.
+ *
+ * Fencing a course with walls is the easy way to keep drivers on it, and it
+ * plays badly: you bounce off the world instead of being punished for missing
+ * the line, and a monster truck hitting a knee-high barrier gets launched
+ * rather than contained. So the boundary is a rule instead of a wall — stray
+ * past it and a countdown starts, come back and it stops, let it run out and
+ * you are put back at the last gate you passed.
+ *
+ * Walls remain available for the places that genuinely need them: a stadium,
+ * a quarry ledge, a bridge.
+ */
+export interface TrackBounds {
+  /**
+   * Metres beyond the shoulder before you count as off course. Generous by
+   * default — running wide is racing, and only leaving the course entirely
+   * should start the clock.
+   */
+  margin?: number;
+  /** Seconds off course before the reset. */
+  seconds?: number;
+}
+
 export interface TrackBarriers {
   /** Length of each barrier segment along the road, in metres. */
   spacing: number;
@@ -366,8 +390,10 @@ export interface MTMTrack {
   road: TrackRoad;
   walls: TrackWall[];
   props: TrackProp[];
-  /** Optional automatic edge fencing. */
+  /** Optional automatic edge fencing. Most courses are better without it. */
   barriers?: TrackBarriers;
+  /** How far off the racing line you may stray, and for how long. */
+  bounds?: TrackBounds;
   /** Optional rule-based scenery scatter. */
   scatter?: TrackScatter[];
   /**

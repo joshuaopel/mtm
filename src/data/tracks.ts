@@ -104,19 +104,18 @@ export const TRACKS: MTMTrack[] = [
         [278, 250, 10], [302, 258, 6], [326, 262, 5], [350, 254, 4],
       ]),
     },
-    barriers: {
-      spacing: 12,
-      height: 1.6,
-      thickness: 0.9,
-      offset: 4,
-      material: 'tire',
-    },
+    // The learner course, so it gets the longest rope: a wide margin and
+    // seven seconds to find your way back before the reset.
+    bounds: { margin: 32, seconds: 7 },
     walls: [],
     props: [{ kind: 'arch', pos: [0, 0, 250], rotation: 90 }],
     scatter: [
-      { kind: 'rock', count: 90, minRoadDistance: 34, maxRoadDistance: 220, maxSlope: 46, scale: [0.9, 3.0], solid: true },
-      { kind: 'barrel', count: 24, minRoadDistance: 30, maxRoadDistance: 70, maxSlope: 16, scale: [1, 1.3], solid: true },
+      { kind: 'rock', count: 90, minRoadDistance: 44, maxRoadDistance: 220, maxSlope: 46, scale: [0.9, 3.0], solid: true },
+      { kind: 'barrel', count: 24, minRoadDistance: 42, maxRoadDistance: 78, maxSlope: 16, scale: [1, 1.3], solid: true },
       { kind: 'sign', count: 14, minRoadDistance: 28, maxRoadDistance: 48, maxSlope: 18, scale: [1, 1.4] },
+      // Marker flags stand where the barriers used to. They read as the edge
+      // of the course from a distance and go straight through the truck.
+      { kind: 'flag', count: 70, minRoadDistance: 38, maxRoadDistance: 50, maxSlope: 30, scale: [1, 1.3] },
     ],
   },
 
@@ -166,19 +165,13 @@ export const TRACKS: MTMTrack[] = [
         [344, 224, 8],
       ]),
     },
-    barriers: {
-      spacing: 11,
-      height: 2.2,
-      thickness: 1.0,
-      offset: 3.0,
-      material: 'rock',
-    },
     walls: [],
     props: [{ kind: 'arch', pos: [0, 0, 230], rotation: 90 }],
     scatter: [
-      { kind: 'rock', count: 160, minRoadDistance: 28, maxRoadDistance: 210, maxSlope: 48, scale: [0.9, 3.4], solid: true },
+      { kind: 'rock', count: 160, minRoadDistance: 36, maxRoadDistance: 210, maxSlope: 48, scale: [0.9, 3.4], solid: true },
       { kind: 'tower', count: 4, minRoadDistance: 70, maxRoadDistance: 170, maxSlope: 20, scale: [0.9, 1.2], solid: true },
       { kind: 'cone', count: 40, minRoadDistance: 14, maxRoadDistance: 26, maxSlope: 22, scale: [1, 1.2] },
+      { kind: 'flag', count: 70, minRoadDistance: 32, maxRoadDistance: 44, maxSlope: 34, scale: [1, 1.3] },
     ],
   },
 
@@ -227,19 +220,15 @@ export const TRACKS: MTMTrack[] = [
         [326, 230, 20], [348, 220, 16],
       ]),
     },
-    barriers: {
-      spacing: 10,
-      height: 1.5,
-      thickness: 0.8,
-      offset: 2.6,
-      material: 'wood',
-    },
     walls: [],
     props: [{ kind: 'arch', pos: [0, 0, 210], rotation: 90 }],
     scatter: [
-      { kind: 'tree', count: 320, minRoadDistance: 22, maxRoadDistance: 220, maxSlope: 40, scale: [0.8, 1.6], solid: true },
-      { kind: 'rock', count: 70, minRoadDistance: 24, maxRoadDistance: 170, maxSlope: 44, scale: [0.7, 2.0], solid: true },
-      { kind: 'crate', count: 20, minRoadDistance: 20, maxRoadDistance: 48, maxSlope: 16, scale: [1, 1.4], solid: true },
+      // The treeline is the barrier here — it starts just past the verge and
+      // punishes running wide without ever fencing the road in.
+      { kind: 'tree', count: 320, minRoadDistance: 32, maxRoadDistance: 220, maxSlope: 40, scale: [0.8, 1.6], solid: true },
+      { kind: 'rock', count: 70, minRoadDistance: 32, maxRoadDistance: 170, maxSlope: 44, scale: [0.7, 2.0], solid: true },
+      { kind: 'crate', count: 20, minRoadDistance: 32, maxRoadDistance: 56, maxSlope: 16, scale: [1, 1.4], solid: true },
+      { kind: 'flag', count: 60, minRoadDistance: 28, maxRoadDistance: 38, maxSlope: 34, scale: [1, 1.3] },
     ],
   },
 
@@ -288,6 +277,9 @@ export const TRACKS: MTMTrack[] = [
         [314, 190, 11], [336, 168, 7],
       ]),
     },
+    // The one circuit that keeps its walls. Everywhere else the course is
+    // open landscape and the out-of-bounds clock does the policing, but a
+    // foundry floor is genuinely walled in and reads wrong without them.
     barriers: {
       spacing: 9,
       height: 2.0,
@@ -295,6 +287,9 @@ export const TRACKS: MTMTrack[] = [
       offset: 1.8,
       material: 'concrete',
     },
+    // Walls already stop you, so the clock only needs to catch a truck that
+    // got over or past them.
+    bounds: { margin: 12, seconds: 4 },
     walls: [],
     props: [{ kind: 'arch', pos: [0, 0, 190], rotation: 90 }],
     scatter: [
@@ -350,19 +345,16 @@ export const TRACKS: MTMTrack[] = [
         [338, 246, 8], [356, 250, 8],
       ]),
     },
-    barriers: {
-      spacing: 12,
-      height: 1.9,
-      thickness: 0.9,
-      offset: 4.0,
-      material: 'metal',
-    },
+    // Big air lands a long way from where it took off, so the margin is
+    // wide enough that a messy landing is not automatically a reset.
+    bounds: { margin: 28 },
     walls: [],
     props: [{ kind: 'arch', pos: [0, 0, 250], rotation: 90 }],
     scatter: [
-      { kind: 'tree', count: 200, minRoadDistance: 32, maxRoadDistance: 250, maxSlope: 36, scale: [0.7, 1.3], solid: true },
-      { kind: 'rock', count: 110, minRoadDistance: 30, maxRoadDistance: 230, maxSlope: 48, scale: [0.9, 2.8], solid: true },
+      { kind: 'tree', count: 200, minRoadDistance: 46, maxRoadDistance: 250, maxSlope: 36, scale: [0.7, 1.3], solid: true },
+      { kind: 'rock', count: 110, minRoadDistance: 46, maxRoadDistance: 230, maxSlope: 48, scale: [0.9, 2.8], solid: true },
       { kind: 'sign', count: 20, minRoadDistance: 26, maxRoadDistance: 44, maxSlope: 20, scale: [1, 1.3] },
+      { kind: 'flag', count: 80, minRoadDistance: 41, maxRoadDistance: 53, maxSlope: 32, scale: [1, 1.4] },
     ],
   },
 
@@ -415,19 +407,16 @@ export const TRACKS: MTMTrack[] = [
         [324, 198, 10], [344, 190, 6],
       ]),
     },
-    barriers: {
-      spacing: 8,
-      height: 1.4,
-      thickness: 0.8,
-      offset: 2.2,
-      material: 'wood',
-    },
+    // Narrow, cramped and hemmed in by trees — there is nowhere legitimate
+    // to be more than sixteen metres off the verge.
+    bounds: { margin: 16 },
     walls: [],
     props: [{ kind: 'arch', pos: [0, 0, 180], rotation: 90 }],
     scatter: [
-      { kind: 'tree', count: 260, minRoadDistance: 16, maxRoadDistance: 180, maxSlope: 38, scale: [0.9, 1.7], solid: true },
-      { kind: 'rock', count: 60, minRoadDistance: 16, maxRoadDistance: 150, maxSlope: 42, scale: [0.6, 1.6], solid: true },
-      { kind: 'barrel', count: 30, minRoadDistance: 14, maxRoadDistance: 56, maxSlope: 20, scale: [1, 1.3], solid: true },
+      { kind: 'tree', count: 260, minRoadDistance: 22, maxRoadDistance: 180, maxSlope: 38, scale: [0.9, 1.7], solid: true },
+      { kind: 'rock', count: 60, minRoadDistance: 22, maxRoadDistance: 150, maxSlope: 42, scale: [0.6, 1.6], solid: true },
+      { kind: 'barrel', count: 30, minRoadDistance: 22, maxRoadDistance: 60, maxSlope: 20, scale: [1, 1.3], solid: true },
+      { kind: 'flag', count: 60, minRoadDistance: 19, maxRoadDistance: 28, maxSlope: 34, scale: [0.9, 1.2] },
     ],
   },
 ];

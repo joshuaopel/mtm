@@ -166,10 +166,14 @@ it wins over the automatic rules wherever you painted.
 5. **Build Start Grid** and, if you want hand-placed gates, **Place
    Checkpoints**. Both are optional — without them the game generates a grid
    behind the line and gates around the road.
-6. Fence the course. Leave **Auto Barriers** on to have the game generate edge
-   walls at load time (cheap, and the file stays small), or press **Generate
-   Barrier Walls** to bake them as real objects you can then edit. Baking turns
-   auto-barriers off so the course is not fenced twice.
+6. Set the course limits. **Off-Course Margin** and **Off-Course Time** (Road
+   panel) decide how far past the shoulder a truck may stray and for how long
+   before it is put back at the last checkpoint it passed. This is usually all
+   the fencing a course needs. If you do want walls, leave **Auto Barriers**
+   on to have the game generate them at load time (cheap, and the file stays
+   small), or press **Generate Barrier Walls** to bake them as real objects you
+   can then edit — baking turns auto-barriers off so the course is not fenced
+   twice.
 7. **Scatter Props** to dress the roadside, then **Drop To Terrain** to settle
    them onto the ground. Add ramps, billboards and flags as tagged Empties —
    see **Props** below.

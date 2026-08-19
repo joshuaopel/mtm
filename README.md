@@ -88,8 +88,32 @@ Courses climb and drop tens of metres, and each carries table-top jumps built
 from tightly-spaced spline points — widely-spaced points can only ever produce
 rolling hills, because the Catmull-Rom re-spline smooths everything between
 them. Verges are wide so the elevation eases out into the landscape instead of
-leaving the road on a wall of dirt, and barrier walls pitch to follow the
-gradient rather than staying level while the ground slopes past.
+leaving the road on a wall of dirt.
+
+Only one stock circuit is fenced — Slag Works, where a foundry floor genuinely
+is walled in. Everywhere else the course is open landscape and the boundary is
+a rule rather than a wall: rows of marker flags show where the course ends,
+and you are free to drive straight past them. That puts the cost of a bad line
+on the driver rather than on a bumper rail. Where walls are used they pitch to
+follow the gradient rather than staying level while the ground slopes past.
+
+## Off course
+
+Leave the course entirely and a countdown starts. The boundary is the road
+plus its shoulder plus a per-track margin, so running wide is racing and only
+genuinely leaving is off course. A banner counts you down — red for the last
+two seconds — and if you have not made it back by then the truck is returned
+to the **last checkpoint it actually passed**, not the nearest point on the
+racing line. That distinction matters: snapping to the nearest point would pay
+out whatever distance a shortcut across the infield had covered.
+
+Coming back inside does not stop the clock dead. It unwinds four times faster
+than it wound up, which clears a real return quickly while stopping the
+countdown flickering on and off as you scrabble along the boundary.
+
+Tracks tune both numbers. Mesa Speedway is the learner course and gets 32m and
+seven seconds; Bog Hollow is cramped and gets 16m; Slag Works has walls doing
+most of the work and only needs the clock to catch a truck that got over them.
 
 ## The rear-view mirror
 
@@ -105,8 +129,10 @@ holding "look back" doesn't aim it forwards.
 Any truck — player or AI — that goes nowhere for five seconds is put back on
 the racing line facing the right way. Inverted trucks are picked up sooner, at
 two and a half. It applies to the whole field deliberately: an AI truck wedged
-against a barrier is both a dead opponent and a permanent obstacle for
-everyone else.
+against a rock is both a dead opponent and a permanent obstacle for everyone
+else. This is separate from the off-course clock above — that one is about
+where you are, this one is about not moving — and the off-course reset takes
+priority so a truck cannot be rescued twice in a step.
 
 ## The retro look
 

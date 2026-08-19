@@ -417,6 +417,61 @@ body {
   text-shadow: 2px 2px 0 #000;
 }
 
+/*
+ * Off-course warning. Sits above the wrong-way line so the two never
+ * collide — the HUD suppresses wrong-way while this is up anyway.
+ */
+.offcourse {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: calc(30px * var(--ui-scale));
+  color: var(--amber);
+  font-weight: 900;
+  letter-spacing: 6px;
+  text-shadow: 3px 3px 0 #000;
+  pointer-events: none;
+}
+
+.offcourse .sub {
+  margin-top: 4px;
+  font-size: calc(14px * var(--ui-scale));
+  font-weight: bold;
+  letter-spacing: 3px;
+}
+
+.offcourse .count {
+  /* Its own slot, so the digit does not crowd the label or shift the line
+     as it counts down through single digits. */
+  display: inline-block;
+  min-width: 1.4em;
+  margin-left: 0.7em;
+  text-align: left;
+  color: #fff;
+}
+
+/* Last couple of seconds: go red and pulse so it reads at a glance. */
+.offcourse.urgent {
+  color: var(--warn);
+  animation: offcourse-pulse 0.5s steps(2, end) infinite;
+}
+
+.offcourse.urgent .count {
+  color: var(--warn);
+}
+
+@keyframes offcourse-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offcourse.urgent { animation: none; }
+}
+
 /* standings list in HUD + results */
 
 .standings {

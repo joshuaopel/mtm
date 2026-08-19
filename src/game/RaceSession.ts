@@ -26,6 +26,27 @@ const MAX_FRAME_TIME = 0.1;
  */
 const STUCK_RESPAWN_SECONDS = 5;
 
+/**
+ * The course boundary, when a track does not set its own.
+ *
+ * `OUT_OF_BOUNDS_MARGIN` is measured out from the edge of the shoulder — the
+ * graded verge either side of the road — so a 24m road with a 16m shoulder
+ * stays fair out to 50m either side of the centreline. Running wide is
+ * racing; only leaving the course entirely should start the clock.
+ */
+const OUT_OF_BOUNDS_MARGIN = 22;
+const OUT_OF_BOUNDS_SECONDS = 5;
+
+/**
+ * Coming back inside does not stop the clock instantly.
+ *
+ * Without this the timer flickers on and off while you scrabble along the
+ * boundary, which reads as a bug and makes the countdown impossible to act
+ * on. Winding down four times faster than it wound up means a genuine return
+ * clears it quickly while a wheel dipping back in does not.
+ */
+const RECOVERY_RATE = 4;
+
 const AI_NAMES = [
   'RAZORBACK', 'STOMPER', 'HALF-TON', 'BONEYARD',
   'DIRT NAP', 'ROADKILL', 'THUNDERHEAD', 'GRIT',
@@ -228,7 +249,7 @@ export class RaceSession {
     for (const racer of this.race.racers) racer.vehicle.syncMesh();
 
     this.race.update(dt);
-    this.handleRescues();
+    this.handleRescues(dt);
   }
 
   /**
@@ -239,7 +260,7 @@ export class RaceSession {
    * against a barrier for the rest of the race is both a dead opponent and a
    * permanent obstacle for everyone else.
    */
-  private handleRescues(): void {
+  private handleRescues(dt: number): void {
     // Nothing to rescue before the flag drops or after it falls.
     if (this.race.phase !== 'racing') return;
 
@@ -249,6 +270,8 @@ export class RaceSession {
       const vehicle = racer.vehicle;
       const belowWorld = vehicle.position.y < -40;
       const stuck = vehicle.stuckFor >= STUCK_RESPAWN_SECONDS;
+
+      if (this.updateBounds(racer, dt)) continue;
       if (!vehicle.needsRescue && !belowWorld && !stuck) continue;
 
       // Snap to the nearest point on the racing line, facing the right way,
@@ -261,6 +284,48 @@ export class RaceSession {
         this.flash(stuck && !vehicle.needsRescue ? 'UNSTUCK' : 'RECOVERED');
       }
     }
+  }
+
+  /** How long a racer may stay off course, for the HUD countdown. */
+  get boundsSeconds(): number {
+    return this.track.definition.bounds?.seconds ?? OUT_OF_BOUNDS_SECONDS;
+  }
+
+  /**
+   * Run the off-course countdown for one racer.
+   *
+   * Returns true when the racer was reset, so the caller skips the other
+   * rescue checks this step rather than resetting them twice.
+   */
+  private updateBounds(racer: Racer, dt: number): boolean {
+    const limit = this.boundsSeconds;
+    const margin = this.track.definition.bounds?.margin ?? OUT_OF_BOUNDS_MARGIN;
+
+    const vehicle = racer.vehicle;
+    const query = this.track.road.closestTo(vehicle.position.x, vehicle.position.z);
+    const edge = query.width * 0.5 + this.track.road.shoulder + margin;
+    const outside = Math.abs(query.lateral) > edge;
+
+    if (!outside) {
+      racer.offTrackFor = Math.max(0, racer.offTrackFor - dt * RECOVERY_RATE);
+      return false;
+    }
+
+    racer.offTrackFor += dt;
+    if (racer.offTrackFor < limit) return false;
+
+    // Back to the last gate actually passed, not the nearest point on the
+    // line: a shortcut across the infield would otherwise be rewarded with
+    // whatever distance it covered.
+    const spawn = this.track.respawnAtCheckpoint(racer.nextCheckpoint - 1);
+    vehicle.reset(spawn.position, spawn.heading);
+    racer.offTrackFor = 0;
+
+    if (racer.isPlayer) {
+      this.camera.reset();
+      this.flash('OFF COURSE');
+    }
+    return true;
   }
 
   private updateAudio(audio: EngineAudio, input: Input): void {
