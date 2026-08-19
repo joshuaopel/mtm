@@ -9,6 +9,7 @@ import type {
   TerrainHeightmap,
 } from './formats';
 import type { RoadPath } from './RoadPath';
+import { staticBody } from './StaticBody';
 import { MAX_LAYERS, buildLayerWeights, paintMaterial, resolvePaint } from './TerrainPaint';
 
 /**
@@ -278,10 +279,12 @@ export class Terrain {
     }
 
     const shape = new CANNON.Heightfield(matrix, { elementSize: this.elementSize });
-    const body = new CANNON.Body({ mass: 0, shape, material: new CANNON.Material('ground') });
-    body.position.set(-this.size / 2, 0, this.size / 2);
-    body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-    return body;
+    return staticBody({
+      shape,
+      position: { x: -this.size / 2, y: 0, z: this.size / 2 },
+      quaternion: new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2),
+      material: new CANNON.Material('ground'),
+    });
   }
 
   /** Bilinear height sample at an arbitrary world position. */

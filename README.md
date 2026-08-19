@@ -123,7 +123,9 @@ src/
     Terrain.ts         heightfield mesh + cannon collision from one array
     TerrainPaint.ts    four-layer ground blend, weights from rules or painting
     Track.ts           assembles scene, physics bodies, gates, spawns
-    Props.ts           low-poly scenery
+    Props.ts           low-poly scenery, ramps, billboards, flags
+    PropShapes.ts      convex hulls for the props you drive on
+    StaticBody.ts      static physics bodies with a correct broadphase AABB
     Vehicle.ts         raycast vehicle + arcade control layer
     TruckMesh.ts       procedural truck bodies, liveries, wheels
     AIDriver.ts        waypoint AI with difficulty profiles
@@ -152,14 +154,23 @@ isn't.
 
 ### Notes on cannon-es
 
-Two things about `RaycastVehicle` cost real debugging time and are worth
-knowing before changing `Vehicle.ts`:
+Three things cost real debugging time and are worth knowing before changing
+`Vehicle.ts` or adding static geometry:
 
 - **`axleLocal` must be `(1, 0, 0)`.** Cannon derives the side-friction axle
   from a hardcoded `directions[indexRightAxis]`, not from the vector you pass.
   Any other value leaves the steering geometry and the friction axis mirrored;
   the wheels then fight each other and roll the truck onto its roof under
   straight-line acceleration.
+- **A static body's AABB is computed once, at the origin.** Passing `shape` to
+  the `Body` constructor computes the bounding box immediately — before the
+  body has been positioned — and clears `aabbNeedsUpdate`. Only `integrate()`
+  re-flags it, and a static body never integrates, so the box stays at 0,0,0
+  for the lifetime of the world. Every broadphase query is gated on it, so the
+  body silently never collides and never appears in a raycast, while looking
+  perfectly correct in the scene. `StaticBody.ts` exists solely to call
+  `updateAABB()` after positioning. This one had every barrier wall, solid prop
+  and collider in the game inert without anyone noticing.
 - **`updateWheelTransform` clears `isInContact`** as its first act, so wheel
   contact must be latched immediately after `world.step` and before the meshes
   are synced. Reading it later always reports "airborne".

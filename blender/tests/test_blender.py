@@ -359,6 +359,38 @@ class TestFullExport(BlenderCase):
         track = self.export()
         self.assertNotIn("paint", track["environment"].get("artwork", {}))
 
+    def test_ramp_and_billboard_props_carry_their_dimensions(self):
+        bpy.ops.mtm.new_track(radius=200, points=10, preview=False)
+        self.settings.track_id = "t"
+        self.settings.track_name = "T"
+
+        ramp = bpy.data.objects.new("Ramp", None)
+        bpy.context.scene.collection.objects.link(ramp)
+        ramp.mtm.role = "PROP"
+        ramp.mtm.prop_kind = "ramp"
+        ramp.mtm.prop_size = (16.0, 3.0, 14.0)
+
+        board = bpy.data.objects.new("Board", None)
+        bpy.context.scene.collection.objects.link(board)
+        board.mtm.role = "PROP"
+        board.mtm.prop_kind = "billboard"
+        board.mtm.prop_texture = "  sponsor.png  "
+
+        tree = bpy.data.objects.new("Tree", None)
+        bpy.context.scene.collection.objects.link(tree)
+        tree.mtm.role = "PROP"
+        tree.mtm.prop_kind = "palm"
+
+        track = self.export()
+        by_kind = {p["kind"]: p for p in track["props"]}
+
+        self.assertEqual(by_kind["ramp"]["size"], [16.0, 3.0, 14.0])
+        self.assertEqual(by_kind["billboard"]["texture"], "sponsor.png")
+        # A tree has no meaningful width/height/length, so it should not carry
+        # the sized-prop defaults into the file.
+        self.assertNotIn("size", by_kind["palm"])
+        self.assertNotIn("texture", by_kind["palm"])
+
     def test_a_blank_layer_slot_ends_the_list(self):
         from mtm_tools.export_track import build_paint
 

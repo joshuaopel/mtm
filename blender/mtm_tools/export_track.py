@@ -16,6 +16,7 @@ from bpy.types import Operator
 from mathutils import Vector
 
 from .collision import build_colliders
+from .props import SIZED_PROP_KINDS, TEXTURED_PROP_KINDS
 from .heightmap import bake_surface, check_road_alignment, encode_heights, encode_paint
 from .convert import (
     box_yaw_degrees,
@@ -122,8 +123,14 @@ def build_props(scene):
             "rotation": yaw_degrees(obj.matrix_world),
             "scale": round(max(0.01, (abs(scale.x) + abs(scale.y) + abs(scale.z)) / 3.0), 4),
         }
+        kind = obj.mtm.prop_kind
         if obj.mtm.prop_solid:
             entry["solid"] = True
+        if kind in SIZED_PROP_KINDS:
+            size = obj.mtm.prop_size
+            entry["size"] = [round(size[0], 3), round(size[1], 3), round(size[2], 3)]
+        if kind in TEXTURED_PROP_KINDS and obj.mtm.prop_texture.strip():
+            entry["texture"] = obj.mtm.prop_texture.strip()
         props.append(entry)
     return props
 

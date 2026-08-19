@@ -181,6 +181,35 @@ meant it.
   selected onto the ground.
 - Model your own geometry, tag it **Scenery Mesh**, and give it a collider.
 
+### Props
+
+Tag an Empty **Prop** and pick a **Kind**. Most are scenery — trees (conifer,
+palm, bare), rocks, barrels, cones, crates, signs, towers, gantries — and tick
+**Solid** if you want them to stop a truck.
+
+Four kinds take a **Size** in metres rather than a scale, because their
+proportions are the thing you are actually authoring:
+
+| Kind | Size means | Notes |
+| --- | --- | --- |
+| **Stunt Ramp** | width, height, length | A kicker. Always solid. |
+| **Table-Top** | width, height, length | Up-ramp, flat deck, down-ramp. Always solid. |
+| **Billboard** | panel width, panel height, post height | Takes an **Image**. |
+| **Flag** | cloth width, cloth height, mast height | Takes an **Image**. Waves. |
+
+Ramps and table-tops are the only props with real collision geometry rather
+than a box — they are convex hulls built from the same description as the
+visible mesh, so what you see is what the wheels ride on. They kick towards
+their local **-Y in Blender**, so point the Empty down the road.
+
+Defaults are a 8 x 2.5 x 11m kicker (about 13 degrees) and a 11 x 3 x 26m
+table-top. Steeper is not automatically better: past about 20 degrees a truck
+stops climbing and starts hitting.
+
+**Billboards** and **flags** take an image path relative to `public/content/`.
+Drop a PNG in there, type its name, and it appears on the hoarding. Leave it
+blank for a plain coloured panel.
+
 ### Collision has to be convex
 
 The physics engine resolves boxes and convex hulls properly but not concave

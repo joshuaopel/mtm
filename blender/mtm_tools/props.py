@@ -62,15 +62,27 @@ FEATURE_KINDS = [
 ]
 
 PROP_KINDS = [
-    ("tree", "Tree", ""),
+    ("ramp", "Stunt Ramp", "A kicker. Always solid — you drive up it"),
+    ("tabletop", "Table-Top", "Up-ramp, flat deck, down-ramp. Always solid"),
+    ("tree", "Tree (Conifer)", ""),
+    ("palm", "Tree (Palm)", ""),
+    ("deadtree", "Tree (Bare)", ""),
     ("rock", "Rock", ""),
     ("barrel", "Barrel", ""),
     ("cone", "Cone", ""),
     ("sign", "Sign", ""),
+    ("billboard", "Billboard", "Hoarding. Give it an image to carry artwork"),
+    ("flag", "Flag", "On a mast, waving in the wind"),
     ("tower", "Tower", ""),
     ("crate", "Crate", ""),
     ("arch", "Arch / Gantry", ""),
 ]
+
+# Kinds whose dimensions are worth setting in metres rather than by scaling,
+# because the shape of a jump is the thing you are actually authoring.
+SIZED_PROP_KINDS = {"ramp", "tabletop", "billboard", "flag"}
+# Kinds that can carry an image.
+TEXTURED_PROP_KINDS = {"billboard", "flag"}
 
 WALL_MATERIALS = [
     ("concrete", "Concrete", ""),
@@ -131,7 +143,24 @@ class MTMObjectProps(PropertyGroup):
     prop_solid: BoolProperty(
         name="Solid",
         default=False,
-        description="Give this prop a collision box",
+        description="Give this prop a collision box. Ramps ignore this — they "
+        "are always solid",
+    )
+    prop_size: FloatVectorProperty(
+        name="Size",
+        size=3,
+        default=(8.0, 2.5, 11.0),
+        min=0.1,
+        subtype="XYZ",
+        description="Width, height and length in metres. Ramps and table-tops "
+        "read length along the direction of travel; billboards and flags read "
+        "the third value as the post or mast height",
+    )
+    prop_texture: StringProperty(
+        name="Image",
+        default="",
+        description="Artwork for a billboard face or flag cloth. A path "
+        "relative to public/content/, e.g. 'my-logo.png'",
     )
 
     # --- checkpoints ---

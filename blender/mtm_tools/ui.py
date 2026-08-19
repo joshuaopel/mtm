@@ -11,6 +11,7 @@ from bpy.types import Panel
 
 from .handling import damping_verdict, handling_numbers, wheelie_verdict
 from .paint import LAYER_COLOURS
+from .props import SIZED_PROP_KINDS, TEXTURED_PROP_KINDS
 
 
 class MTMPanel:
@@ -255,7 +256,14 @@ class MTM_PT_object(MTMPanel, Panel):
         elif mtm.role == "PROP":
             box = layout.box()
             box.prop(mtm, "prop_kind")
-            box.prop(mtm, "prop_solid")
+            if mtm.prop_kind in SIZED_PROP_KINDS:
+                box.prop(mtm, "prop_size")
+            if mtm.prop_kind in TEXTURED_PROP_KINDS:
+                box.prop(mtm, "prop_texture")
+            if mtm.prop_kind in ("ramp", "tabletop"):
+                box.label(text="Always solid. Faces -Y in Blender.", icon="INFO")
+            else:
+                box.prop(mtm, "prop_solid")
         elif mtm.role == "CHECKPOINT":
             box = layout.box()
             box.prop(mtm, "checkpoint_order")

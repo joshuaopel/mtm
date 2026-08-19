@@ -9,6 +9,7 @@ import { AIDriver, type Difficulty } from './AIDriver';
 import { Race, type Racer } from './Race';
 import { ChaseCamera } from './ChaseCamera';
 import { DebugOverlay } from './DebugOverlay';
+import { advanceWind } from './Props';
 import type { MTMTrack, MTMVehicle } from './formats';
 
 /** Physics runs at a fixed rate; rendering is decoupled from it. */
@@ -180,6 +181,10 @@ export class RaceSession {
       this.step(FIXED_STEP, input);
       this.accumulator -= FIXED_STEP;
     }
+
+    // Flags deform in the vertex shader from a shared phase, so this is the
+    // entire per-frame cost of every flag on the track.
+    advanceWind(frameTime);
 
     this.camera.update(frameTime, this.playerVehicle);
     this.updateAudio(audio, input);

@@ -171,7 +171,8 @@ it wins over the automatic rules wherever you painted.
    Barrier Walls** to bake them as real objects you can then edit. Baking turns
    auto-barriers off so the course is not fenced twice.
 7. **Scatter Props** to dress the roadside, then **Drop To Terrain** to settle
-   them onto the ground.
+   them onto the ground. Add ramps, billboards and flags as tagged Empties —
+   see **Props** below.
 8. Model any custom geometry, tag it **Scenery Mesh**, and give it collision
    (see below).
 9. **Validate Track**, then **Export Track**.
@@ -189,6 +190,34 @@ of the scenery beside it. Copy **both** into the game's `public/content/`.
   your course. Lower it.
 - The preview appears but is flat — check **Amplitude** is not zero and that
   your Terrain Feature empties are actually tagged.
+
+## Props
+
+Tag an Empty **Prop** and pick a **Kind**. Most are scenery — trees (conifer,
+palm, bare), rocks, barrels, cones, crates, signs, towers, gantries — with a
+**Solid** tick if you want them to stop a truck.
+
+Four kinds take a **Size** in metres instead of a scale, because their
+proportions are what you are authoring:
+
+| Kind | Size means |
+| --- | --- |
+| Stunt Ramp | width, height, length |
+| Table-Top | width, height, length |
+| Billboard | panel width, panel height, post height |
+| Flag | cloth width, cloth height, mast height |
+
+**Ramps and table-tops are the only props with real collision geometry** — a
+convex hull built from the same description as the visible mesh, so the wheels
+ride exactly what you see. They are always solid, and they kick towards their
+local **-Y in Blender**, so point the Empty down the road. The defaults are a
+8 x 2.5 x 11m kicker (about 13 degrees) and a 11 x 3 x 26m table-top; past
+about 20 degrees a truck stops climbing a ramp and starts hitting it.
+
+**Billboards** and **flags** take an **Image** path relative to
+`public/content/`. Drop a PNG in there, type its name, and it appears on the
+hoarding or the cloth. Flags wave — in the vertex shader, from a single shared
+phase, so a hundred of them cost one number per frame between them.
 
 ## Collision
 

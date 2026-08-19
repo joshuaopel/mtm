@@ -294,13 +294,50 @@ export interface TrackCollider {
   name?: string;
 }
 
+export type PropKind =
+  | 'tree'
+  | 'palm'
+  | 'deadtree'
+  | 'rock'
+  | 'barrel'
+  | 'cone'
+  | 'sign'
+  | 'billboard'
+  | 'flag'
+  | 'tower'
+  | 'crate'
+  | 'arch'
+  | 'ramp'
+  | 'tabletop';
+
 export interface TrackProp {
-  kind: 'tree' | 'rock' | 'barrel' | 'cone' | 'sign' | 'tower' | 'crate' | 'arch';
+  kind: PropKind;
   pos: Vec3;
+  /** Yaw in degrees. Ramps kick towards their local -Z at rotation 0. */
   rotation?: number;
   scale?: number;
-  /** Props default to decorative; set true to give them a collision box. */
+  /**
+   * Props default to decorative; set true to give them collision.
+   *
+   * Ignored for ramps, which are always solid — a ramp you cannot drive up
+   * is not a ramp.
+   */
   solid?: boolean;
+  /**
+   * Explicit dimensions in metres, meaning per kind:
+   * - `ramp`: [width, height, length]
+   * - `tabletop`: [width, height, length]
+   * - `billboard`: [width, height, post height]
+   * - `flag`: [width, height, mast height]
+   *
+   * Left out, each kind uses its own default. `scale` still multiplies on top.
+   */
+  size?: Vec3;
+  /**
+   * Image for the kinds that carry artwork — the face of a billboard, the
+   * cloth of a flag. Falls back to a generated panel when absent or broken.
+   */
+  texture?: string;
 }
 
 /**

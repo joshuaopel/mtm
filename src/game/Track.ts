@@ -4,9 +4,10 @@ import { Rng } from '../core/Noise';
 import { checkerTexture, imageTexture, roadTexture, skyTexture, wallTexture } from '../core/Textures';
 import { RoadPath } from './RoadPath';
 import { Terrain } from './Terrain';
-import { buildProp } from './Props';
+import { type PropCollision, buildProp } from './Props';
+import { staticBody } from './StaticBody';
 import { disposeModel } from '../core/Assets';
-import type { MTMTrack, TrackCheckpoint, TrackCollider, TrackWall } from './formats';
+import type { MTMTrack, TrackCheckpoint, TrackCollider, TrackProp, TrackWall } from './formats';
 
 /**
  * How far above the road a truck is placed.
@@ -280,15 +281,16 @@ export class Track {
       const pitch = (wall.pitch ?? 0) * (Math.PI / 180);
       const half = new CANNON.Vec3(wall.size[0] / 2, wall.size[1] / 2, wall.size[2] / 2);
 
-      const body = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Box(half),
-        material: this.groundMaterial,
-      });
-      body.position.set(wall.pos[0], wall.pos[1], wall.pos[2]);
       // YXZ: yaw first, then pitch about the wall's own long axis.
-      body.quaternion.setFromEuler(pitch, yaw, 0, 'YXZ');
-      this.world.addBody(body);
+      const orientation = new CANNON.Quaternion().setFromEuler(pitch, yaw, 0, 'YXZ');
+      this.world.addBody(
+        staticBody({
+          shape: new CANNON.Box(half),
+          position: { x: wall.pos[0], y: wall.pos[1], z: wall.pos[2] },
+          quaternion: orientation,
+          material: this.groundMaterial,
+        }),
+      );
 
       if (wall.invisible) continue;
 
@@ -346,25 +348,57 @@ export class Track {
       const built = buildProp(definition, rng.int(0, 2 ** 30));
       this.scene.add(built.object);
 
-      if (built.collisionHalfExtents) {
-        const half = built.collisionHalfExtents;
-        const body = new CANNON.Body({
-          mass: 0,
-          shape: new CANNON.Box(new CANNON.Vec3(half.x, half.y, half.z)),
-          material: this.groundMaterial,
-        });
-        body.position.set(
-          definition.pos[0],
-          definition.pos[1] + half.y,
-          definition.pos[2],
-        );
-        body.quaternion.setFromAxisAngle(
-          new CANNON.Vec3(0, 1, 0),
-          (definition.rotation ?? 0) * (Math.PI / 180),
-        );
+      const body = this.propBody(built.collision, definition);
+      if (body) {
         this.world.addBody(body);
       }
     }
+  }
+
+  /**
+   * The static body for a prop, or null if it is decorative.
+   *
+   * Box collision is anchored by its base so a prop authored at ground level
+   * sits on the ground; hull vertices already carry their own origin, so a
+   * ramp goes straight to the prop's position.
+   */
+  private propBody(collision: PropCollision | null, prop: TrackProp): CANNON.Body | null {
+    if (!collision) return null;
+
+    let shape: CANNON.Shape;
+    let baseOffset = 0;
+
+    if (collision.kind === 'box') {
+      const half = collision.halfExtents;
+      shape = new CANNON.Box(new CANNON.Vec3(half.x, half.y, half.z));
+      baseOffset = half.y;
+    } else {
+      const hull = collision.hull;
+      const vertices: CANNON.Vec3[] = [];
+      for (let i = 0; i < hull.vertices.length / 3; i++) {
+        vertices.push(
+          new CANNON.Vec3(hull.vertices[i * 3], hull.vertices[i * 3 + 1], hull.vertices[i * 3 + 2]),
+        );
+      }
+      try {
+        shape = new CANNON.ConvexPolyhedron({ vertices, faces: hull.faces });
+      } catch (error) {
+        // A degenerate hull throws rather than returning an error, and one bad
+        // ramp must not take the track down with it.
+        console.warn(`[track] prop "${prop.kind}" produced an invalid hull:`, error);
+        return null;
+      }
+    }
+
+    return staticBody({
+      shape,
+      position: { x: prop.pos[0], y: prop.pos[1] + baseOffset, z: prop.pos[2] },
+      quaternion: new CANNON.Quaternion().setFromAxisAngle(
+        new CANNON.Vec3(0, 1, 0),
+        (prop.rotation ?? 0) * (Math.PI / 180),
+      ),
+      material: this.groundMaterial,
+    });
   }
 
   /**
@@ -392,28 +426,18 @@ export class Track {
         if (lateral < rule.minRoadDistance || lateral > rule.maxRoadDistance) continue;
         if (this.terrain.slopeAt(x, z) > rule.maxSlope * (Math.PI / 180)) continue;
 
-        const built = buildProp(
-          {
-            kind: rule.kind,
-            pos: [x, this.terrain.heightAt(x, z), z],
-            rotation: rng.range(0, 360),
-            scale: rng.range(rule.scale[0], rule.scale[1]),
-            solid: rule.solid,
-          },
-          rng.int(0, 2 ** 30),
-        );
+        const definition: TrackProp = {
+          kind: rule.kind,
+          pos: [x, this.terrain.heightAt(x, z), z],
+          rotation: rng.range(0, 360),
+          scale: rng.range(rule.scale[0], rule.scale[1]),
+          solid: rule.solid,
+        };
+        const built = buildProp(definition, rng.int(0, 2 ** 30));
         this.scene.add(built.object);
 
-        if (built.collisionHalfExtents) {
-          const half = built.collisionHalfExtents;
-          const body = new CANNON.Body({
-            mass: 0,
-            shape: new CANNON.Box(new CANNON.Vec3(half.x, half.y, half.z)),
-            material: this.groundMaterial,
-          });
-          body.position.set(x, this.terrain.heightAt(x, z) + half.y, z);
-          this.world.addBody(body);
-        }
+        const body = this.propBody(built.collision, definition);
+        if (body) this.world.addBody(body);
         placed++;
       }
     }
@@ -452,15 +476,19 @@ export class Track {
       const shape = this.buildColliderShape(collider);
       if (!shape) continue;
 
-      const body = new CANNON.Body({ mass: 0, shape, material: this.groundMaterial });
-      body.position.set(collider.pos[0], collider.pos[1], collider.pos[2]);
-      body.quaternion.setFromEuler(
-        (collider.pitch ?? 0) * (Math.PI / 180),
-        (collider.rotation ?? 0) * (Math.PI / 180),
-        0,
-        'YXZ',
+      this.world.addBody(
+        staticBody({
+          shape,
+          position: { x: collider.pos[0], y: collider.pos[1], z: collider.pos[2] },
+          quaternion: new CANNON.Quaternion().setFromEuler(
+            (collider.pitch ?? 0) * (Math.PI / 180),
+            (collider.rotation ?? 0) * (Math.PI / 180),
+            0,
+            'YXZ',
+          ),
+          material: this.groundMaterial,
+        }),
       );
-      this.world.addBody(body);
     }
   }
 
