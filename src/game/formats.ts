@@ -1,5 +1,5 @@
 /**
- * Shared data formats for Monster Truck Madness.
+ * Shared data formats for Monster Truck Mania.
  *
  * These interfaces are the contract between the runtime and the Blender
  * exporter in `blender/mtm_tools`. Anything the exporter writes must

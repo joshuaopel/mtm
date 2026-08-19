@@ -1,6 +1,6 @@
 # MTM Tools — Blender add-on
 
-Authoring tools for Monster Truck Madness tracks and vehicles. Exports the
+Authoring tools for Monster Truck Mania tracks and vehicles. Exports the
 JSON formats defined in `src/game/formats.ts`.
 
 Tested against Blender 5.0 (the suite in `tests/test_blender.py` runs the

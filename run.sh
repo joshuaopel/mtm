@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------
-#  Monster Truck Madness - start the game.
+#  Monster Truck Mania - start the game.
 #
 #  ./run.sh
 #
@@ -15,7 +15,7 @@ cd "$(dirname "$0")"
 
 REQUIRED="20.19.0"
 
-printf '\n  MONSTER TRUCK MADNESS\n  =====================\n\n'
+printf '\n  MONSTER TRUCK MANIA\n  ===================\n\n'
 
 if ! command -v node >/dev/null 2>&1; then
   printf '  Node.js was not found on your PATH.\n\n'

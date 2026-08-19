@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 """
-MTM Tools — Blender add-on for authoring Monster Truck Madness content.
+MTM Tools — Blender add-on for authoring Monster Truck Mania content.
 
 Install: Edit > Preferences > Add-ons > Install..., pick the zipped
 `mtm_tools` folder (or drop the folder into your Blender addons directory),
@@ -18,11 +18,11 @@ coordinates are converted on export — see `convert_position`.
 
 bl_info = {
     "name": "MTM Tools",
-    "author": "Monster Truck Madness",
+    "author": "Monster Truck Mania",
     "version": (1, 0, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar (N) > MTM",
-    "description": "Author tracks and vehicles for Monster Truck Madness",
+    "description": "Author tracks and vehicles for Monster Truck Mania",
     "category": "Game Engine",
 }
 

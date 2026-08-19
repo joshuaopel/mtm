@@ -1,4 +1,6 @@
-# Monster Truck Madness
+# Monster Truck Mania
+
+![The six stock trucks on the line at Mesa Speedway](docs/promo.png)
 
 A web arcade racer in the spirit of the 1996 PC original: low-resolution
 rendering, dithered 16-bit colour, fog you can taste, and trucks with far too
@@ -352,6 +354,23 @@ through scaffold, carve, paint and export. It skips itself when `bpy` is
 missing, and it earns its keep: it immediately found that every scaffolded track
 was exporting a 100m terrain patch for a 700m course, because an Empty reports
 an all-zero bounding box and the size was read from `bound_box`.
+
+## Promo art
+
+The image at the top of this file is not a mockup — it is the game. Start the
+dev server and open `/tools/promo/index.html`, and `tools/promo/promo.ts`
+builds Mesa Speedway with the shipping `Track` code, lines every stock truck up
+on the start line with `buildTruckMesh`, and renders it through the same retro
+pipeline as a race. Only the title and the name strip are HTML on top.
+
+Doing it that way means the artwork cannot quietly stop matching the game: add
+a truck or restyle one and the next render shows it. The name strip orders
+itself by projecting each truck into screen space, so it stays correct when the
+formation is retuned.
+
+Framing is tunable from the query string —
+`?bearing=2&dist=15&height=1.2&fov=56&aim=3` are the defaults. Screenshot the
+page at 1600x760 (at 2x device scale for a crisp one) and you have the poster.
 
 ## Steam
 

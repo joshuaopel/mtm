@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Monster Truck Madness inspired arcade racer for the web",
+  "description": "Monster Truck Mania inspired arcade racer for the web",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

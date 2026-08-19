@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MONSTER TRUCK MANIA - promo shot</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      /*
+       * Poster chrome only. Everything inside #view is the real game
+       * renderer, so the trucks and the landscape are exactly what ships.
+       */
+      body { background: #000; }
+      #shot { position: fixed; inset: 0; overflow: hidden; }
+      #view { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+      /*
+       * Full width, so "MONSTER TRUCK" stays on one line. A half-width plate
+       * centred with a transform wraps it, which costs the poster a third of
+       * its height.
+       */
+      #plate {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 5%;
+        text-align: center;
+        font-family: 'Courier New', 'Lucida Console', monospace;
+        text-transform: uppercase;
+      }
+
+      #plate h1 {
+        margin: 0;
+        font-size: 78px;
+        line-height: 0.95;
+        font-weight: 900;
+        color: var(--amber);
+        letter-spacing: 9px;
+        /* Same hard offset shadows as the in-game title, scaled up. */
+        text-shadow: 5px 5px 0 var(--rust), 9px 9px 0 #000;
+      }
+
+      #plate .sub {
+        margin-top: 16px;
+        font-size: 19px;
+        letter-spacing: 11px;
+        color: var(--paper);
+        text-shadow: 3px 3px 0 #000;
+      }
+
+      /* Roster strip along the bottom: one cell per truck, in scene order. */
+      #roster {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        padding: 0 0 26px;
+        font-family: 'Courier New', 'Lucida Console', monospace;
+        text-transform: uppercase;
+      }
+
+      #roster .cell {
+        padding: 8px 22px;
+        text-align: center;
+        border-left: 2px solid rgba(20, 20, 15, 0.55);
+      }
+
+      #roster .cell:first-child { border-left: 0; }
+
+      #roster .nm {
+        display: block;
+        font-size: 19px;
+        font-weight: 900;
+        letter-spacing: 3px;
+        color: var(--amber);
+        text-shadow: 2px 2px 0 #000;
+      }
+
+      #roster .cl {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        letter-spacing: 4px;
+        color: var(--steel-lt);
+        text-shadow: 2px 2px 0 #000;
+      }
+
+      /* Sits the strip on a band so the names read over bright ground. */
+      #rosterbg {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 92px;
+        background: linear-gradient(180deg, rgba(10, 8, 4, 0) 0%, rgba(10, 8, 4, 0.72) 55%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="shot">
+      <canvas id="view"></canvas>
+      <div id="plate">
+        <h1>MONSTER TRUCK<br />MANIA</h1>
+        <div class="sub">SIX TRUCKS &middot; SIX COURSES</div>
+      </div>
+      <div id="rosterbg"></div>
+      <div id="roster"></div>
+    </div>
+    <script type="module" src="./promo.ts"></script>
+  </body>
+</html>

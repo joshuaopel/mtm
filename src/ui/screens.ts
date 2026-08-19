@@ -36,7 +36,7 @@ export class TitleScreen implements Screen {
 
     this.root = el('div', { class: 'screen' }, [
       el('div', { class: 'title-plate' }, [
-        el('h1', {}, ['MONSTER', el('br'), 'TRUCK MADNESS']),
+        el('h1', {}, ['MONSTER', el('br'), 'TRUCK MANIA']),
         el('div', { class: 'sub', text: 'DIRT * AIR * CARNAGE' }),
       ]),
       this.menu.root,

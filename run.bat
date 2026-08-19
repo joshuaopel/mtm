@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------
-REM  Monster Truck Madness - start the game.
+REM  Monster Truck Mania - start the game.
 REM
 REM  Double-click this file. It checks Node is present and new enough,
 REM  installs the dependencies the first time, then starts the dev server
@@ -14,11 +14,11 @@ setlocal enabledelayedexpansion
 REM Run from this file's own folder, whatever directory it was launched from.
 cd /d "%~dp0"
 
-title Monster Truck Madness
+title Monster Truck Mania
 
 echo.
-echo   MONSTER TRUCK MADNESS
-echo   =====================
+echo   MONSTER TRUCK MANIA
+echo   ===================
 echo.
 
 where node >nul 2>nul
