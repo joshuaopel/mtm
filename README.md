@@ -10,11 +10,26 @@ playable track is a few lines of data. When you want real geometry instead,
 the Blender add-on in `blender/` is the level and vehicle editor: model it,
 tag it, export it, and the game loads it.
 
+## Running it
+
+**Windows:** double-click `run.bat`.
+**macOS / Linux:** `./run.sh`
+
+Either one checks Node is present and new enough, installs the dependencies
+the first time, starts the server and opens your browser. Leave the window
+open while you play.
+
+If you would rather drive it yourself:
+
 ```bash
 npm install
 npm run dev      # http://127.0.0.1:5173
 npm run build    # typecheck + production bundle into dist/
+npm run preview  # serve that bundle
 ```
+
+Node 20.19 or newer. Nothing else to install — no build step for content, no
+asset pipeline, no database.
 
 ## Controls
 

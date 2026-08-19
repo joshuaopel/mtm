@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import { contentPlugin } from './tools/content-plugin';
+import { contentPlugin } from './tools/content-plugin.ts';
 
 export default defineConfig({
   base: './',
