@@ -370,6 +370,14 @@ export interface MTMTrack {
   barriers?: TrackBarriers;
   /** Optional rule-based scenery scatter. */
   scatter?: TrackScatter[];
+  /**
+   * Song to play on this course, as a path relative to `public/content/`.
+   *
+   * Left out, whatever was already playing keeps going — which is usually
+   * what you want, since restarting the music at every screen change is
+   * more noticeable than a song carrying across one.
+   */
+  music?: string;
   /** Optional; auto-generated along the road spline when absent. */
   checkpoints?: TrackCheckpoint[];
   /** Optional; auto-generated as a start grid behind checkpoint 0 when absent. */

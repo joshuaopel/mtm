@@ -115,6 +115,8 @@ src/
     Assets.ts          glTF loading, caching and retro material conversion
     Input.ts           keyboard + gamepad, mapped to named actions
     Textures.ts        procedural 64x64 surface/wall/sky textures
+    Palette.ts         16-colour vehicle atlas, shared with the Blender tools
+    Music.ts           streamed background music with fades
     Noise.ts           seeded PRNG and value noise
     Audio.ts           synthesised engine, tyre noise and impacts
   game/
@@ -213,6 +215,12 @@ the physics engine resolves boxes and convex hulls properly but not concave
 triangle meshes, which would silently let trucks through. The exporter checks
 this and refuses to write a collider that would fail.
 
+**Vehicle colours.** A modelled truck is painted from a 4x4 atlas of sixteen
+muted colours: one material, one texture, and a part's colour is which cell its
+UVs point at. Select faces in Blender, click a swatch. The engine generates the
+sheet itself and substitutes it for whatever a `.glb` ships with, so changing a
+colour updates every vehicle ever exported.
+
 **Vehicles.** The reference rig draws what the simulation believes — chassis
 box, wheel positions through their full travel, ground plane, centre of mass —
 so you can model against it. Supply a body and one wheel; the game instances
@@ -220,6 +228,18 @@ the wheel four times and places them from the physics rig. Or skip modelling
 entirely and use the procedural body.
 
 For where the tooling is going, see [`docs/engine-tools.md`](docs/engine-tools.md).
+
+## Music
+
+Drop an audio file into `public/content/` and it plays — `.mp3`, `.ogg`,
+`.m4a`, `.wav`, `.opus` or `.flac`, no naming convention and no manifest.
+Several files become a playlist. A track can name its own song with a `music`
+field, and anything else carries on playing across screen changes rather than
+restarting. **MUSIC** and **MUSIC VOLUME** live under Controls.
+
+It streams through an audio element rather than the Web Audio graph the engine
+noise uses: a song is minutes long, and decoding it would hold the whole thing
+in memory as raw samples and stall the first race.
 
 ## Adding content
 
@@ -276,6 +296,7 @@ python3 blender/tests/test_collision.py  # collider convexity check
 python3 blender/tests/test_handling.py   # derived handling numbers
 python3 blender/tests/test_generate.py   # terrain and road generation
 python3 blender/tests/test_heightmap.py  # sculpted-terrain bake
+python3 blender/tests/test_palette.py    # vehicle colour atlas
 python3 blender/tests/test_blender.py    # the add-on inside Blender (needs bpy)
 ```
 

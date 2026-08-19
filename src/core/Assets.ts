@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { PALETTE_MATERIAL, paletteTexture } from './Palette';
 
 /**
  * glTF model loading and caching.
@@ -37,15 +38,27 @@ function retroifyMaterials(root: THREE.Object3D): void {
     const source = Array.isArray(child.material) ? child.material : [child.material];
     const converted = source.map((material) => {
       const standard = material as THREE.MeshStandardMaterial;
+
+      // A model painted from the colour atlas gets the engine's own copy,
+      // whatever sheet it happens to ship with. The palette then has one
+      // definition, and retuning a colour updates every vehicle already
+      // exported instead of only the ones re-exported afterwards.
+      const isPalette = standard.name === PALETTE_MATERIAL;
+
       const lambert = new THREE.MeshLambertMaterial({
-        color: standard.color ?? new THREE.Color(0xffffff),
-        map: standard.map ?? null,
+        color: isPalette ? new THREE.Color(0xffffff) : standard.color ?? new THREE.Color(0xffffff),
+        map: isPalette ? paletteTexture() : standard.map ?? null,
         transparent: standard.transparent,
         opacity: standard.opacity,
         side: standard.side,
         // Flat shading is the single biggest contributor to the period look.
         flatShading: true,
       });
+      lambert.name = standard.name;
+
+      // The atlas is already nearest-filtered and unmipped; the retro pass
+      // below would only undo that.
+      if (isPalette) return lambert;
 
       // Imported textures are usually big and smooth; nearest filtering drags
       // them back towards the chunky look of the built-in ones.

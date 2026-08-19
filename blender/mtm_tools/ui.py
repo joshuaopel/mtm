@@ -11,6 +11,7 @@ from bpy.types import Panel
 
 from .handling import damping_verdict, handling_numbers, wheelie_verdict
 from .paint import LAYER_COLOURS
+from .palette import COLUMNS as PALETTE_COLUMNS, PALETTE
 from .props import SIZED_PROP_KINDS, TEXTURED_PROP_KINDS
 
 
@@ -464,6 +465,34 @@ class MTM_PT_vehicle_look(MTMPanel, Panel):
         row.prop(settings, "light_bar", toggle=True)
 
 
+class MTM_PT_vehicle_palette(MTMPanel, Panel):
+    bl_label = "Colours"
+    bl_idname = "MTM_PT_vehicle_palette"
+    bl_parent_id = "MTM_PT_vehicle"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.label(text="One material, sixteen colours", icon="COLOR")
+        layout.operator("mtm.apply_palette", icon="MATERIAL")
+
+        obj = context.object
+        editing = obj is not None and obj.mode == "EDIT"
+        layout.label(
+            text="Painting selected faces" if editing else "Painting whole objects",
+            icon="EDITMODE_HLT" if editing else "OBJECT_DATAMODE",
+        )
+
+        # Four rows of four, laid out exactly as the atlas is: bodywork warm,
+        # bodywork cool, neutrals, then the detail materials.
+        grid = layout.grid_flow(row_major=True, columns=PALETTE_COLUMNS, align=True)
+        for index, (name, _) in enumerate(PALETTE):
+            grid.operator("mtm.paint_palette", text=name).index = index
+
+        layout.separator()
+        layout.operator("mtm.refresh_palette", icon="FILE_REFRESH")
+
 class MTM_PT_vehicle_model(MTMPanel, Panel):
     bl_label = "Reference Rig & Model"
     bl_idname = "MTM_PT_vehicle_model"
@@ -526,6 +555,7 @@ _CLASSES = (
     MTM_PT_vehicle_physics,
     MTM_PT_vehicle_response,
     MTM_PT_vehicle_look,
+    MTM_PT_vehicle_palette,
     MTM_PT_vehicle_model,
     MTM_PT_vehicle_export,
 )

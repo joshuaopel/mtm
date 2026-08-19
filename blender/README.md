@@ -293,6 +293,37 @@ export them as a `.glb` the game uses instead.
 You can drag the reference wheels around and press **Read Back From Rig** to
 pull the axle positions back into the settings.
 
+### Colouring a modelled truck
+
+A truck wants more than one colour, but a material per part means a draw call
+per part. The period answer, and still the right one, is a single texture of
+flat colours and a single material: each part's faces point at a different cell
+of a 4x4 sheet. A truck with sixteen colours then costs exactly what a truck
+with one colour costs.
+
+So painting is a UV operation, and the **Colours** panel is the whole interface:
+
+1. Select your meshes and press **Apply Palette Material**. They get the shared
+   `MTM_Palette` material and a UV layer.
+2. Tab into Edit Mode and select the faces you want to colour — the bumper, the
+   cage, the light bar.
+3. Click a swatch. Those faces move onto that colour's cell.
+
+In Object Mode a swatch paints the whole object, which is the quick way to block
+in a body before detailing it. The panel says which mode you are in.
+
+The engine generates its own copy of the sheet and substitutes it for whatever
+your `.glb` ships with, so `src/core/Palette.ts` is the single source of truth:
+retune a colour there and every vehicle ever exported changes with it.
+`tests/test_palette.py` reads that file directly and fails if the two drift,
+because a mismatch does not look like a bug — you just quietly get the colour
+from the next cell along.
+
+The sixteen are two rows of bodywork, a row of neutrals, and a row of the
+materials every truck needs: tyre black, leather, chrome and amber glass. They
+are deliberately desaturated — fully saturated paint reads as plastic against
+dithered dirt, and the renderer quantises to 16 levels per channel anyway.
+
 ### Modelling your own body
 
 The rig creates two slots: `MTM_Body` and `MTM_Wheel`. Either rename your
@@ -342,6 +373,7 @@ python3 blender/tests/test_collision.py  # collider convexity check
 python3 blender/tests/test_handling.py   # derived handling numbers
 python3 blender/tests/test_generate.py   # terrain and road generation
 python3 blender/tests/test_heightmap.py  # sculpted-terrain bake
+python3 blender/tests/test_palette.py    # vehicle colour atlas
 ```
 
 Those stub `bpy` out, so they run anywhere but can only see pure-Python

@@ -338,26 +338,49 @@ export class PauseScreen implements Screen {
   }
 }
 
+/** Everything the Controls screen needs to describe the music. */
+export interface MusicState {
+  /** False when no audio file has been dropped into the content folder. */
+  available: boolean;
+  enabled: boolean;
+  volume: number;
+}
+
+const VOLUME_LABELS = ['OFF', 'LOW', 'MEDIUM', 'HIGH'];
+
 export class ControlsScreen implements Screen {
   readonly root: HTMLElement;
   private onBack: () => void;
   private onDetailChange: (detail: DetailLevel) => void;
   private onToggleMute: () => boolean;
+  private onToggleMusic: () => MusicState;
+  private onCycleMusicVolume: () => MusicState;
 
   private detail: DetailLevel;
   private muted = false;
+  private music: MusicState;
   private menu: Menu;
 
   constructor(
     initialDetail: DetailLevel,
     initialMuted: boolean,
-    actions: { onBack(): void; onDetailChange(detail: DetailLevel): void; onToggleMute(): boolean },
+    initialMusic: MusicState,
+    actions: {
+      onBack(): void;
+      onDetailChange(detail: DetailLevel): void;
+      onToggleMute(): boolean;
+      onToggleMusic(): MusicState;
+      onCycleMusicVolume(): MusicState;
+    },
   ) {
     this.onBack = actions.onBack;
     this.onDetailChange = actions.onDetailChange;
     this.onToggleMute = actions.onToggleMute;
+    this.onToggleMusic = actions.onToggleMusic;
+    this.onCycleMusicVolume = actions.onCycleMusicVolume;
     this.detail = initialDetail;
     this.muted = initialMuted;
+    this.music = initialMusic;
 
     const rows: [string, string][] = [
       ['ACCELERATE', 'UP ARROW / W / RIGHT TRIGGER'],
@@ -369,6 +392,7 @@ export class ControlsScreen implements Screen {
       ['LOOK BACK', 'B / LB'],
       ['REAR-VIEW MIRROR', 'M / SELECT'],
       ['PAUSE', 'ESC / START'],
+      ['MUSIC', 'DROP AN MP3 INTO PUBLIC/CONTENT'],
     ];
 
     const table = el('div', { class: 'results-table bevel' }, [
@@ -417,6 +441,26 @@ export class ControlsScreen implements Screen {
         tag: this.muted ? 'OFF' : 'ON',
         onSelect: () => {
           this.muted = this.onToggleMute();
+          this.rebuild();
+        },
+      },
+      // Shown even with nothing to play, so it is obvious the feature exists
+      // and where a song would go.
+      {
+        label: 'MUSIC',
+        tag: !this.music.available ? 'NONE FOUND' : this.music.enabled ? 'ON' : 'OFF',
+        onSelect: () => {
+          if (!this.music.available) return;
+          this.music = this.onToggleMusic();
+          this.rebuild();
+        },
+      },
+      {
+        label: 'MUSIC VOLUME',
+        tag: VOLUME_LABELS[Math.min(3, Math.round(this.music.volume * 3.4))],
+        onSelect: () => {
+          if (!this.music.available) return;
+          this.music = this.onCycleMusicVolume();
           this.rebuild();
         },
       },

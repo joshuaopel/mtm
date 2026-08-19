@@ -9,6 +9,7 @@ import { Hud } from './ui/Hud';
 import { Telemetry } from './ui/Telemetry';
 import {
   ControlsScreen,
+  type MusicState,
   LoadingScreen,
   PauseScreen,
   ResultsScreen,
@@ -20,6 +21,7 @@ import type { Screen } from './ui/Screen';
 import { TRACKS } from './data/tracks';
 import { VEHICLES } from './data/vehicles';
 import { loadContent } from './game/ContentLoader';
+import { MusicPlayer } from './core/Music';
 import { loadModels, clearModelCache } from './core/Assets';
 import type { MTMTrack, MTMVehicle } from './game/formats';
 import type { Difficulty } from './game/AIDriver';
@@ -34,6 +36,7 @@ class Game {
   private renderer: RetroRenderer;
   private input = new Input();
   private audio = new EngineAudio();
+  private music = new MusicPlayer();
   private showroom: Showroom;
   private hud = new Hud();
   private telemetry = new Telemetry();
@@ -70,7 +73,10 @@ class Game {
     window.addEventListener('resize', () => this.resize());
 
     // Browsers only allow audio to start from a user gesture.
-    const unlock = (): void => void this.audio.unlock();
+    const unlock = (): void => {
+      void this.audio.unlock();
+      this.music.unlock();
+    };
     window.addEventListener('keydown', unlock, { once: true });
     window.addEventListener('pointerdown', unlock, { once: true });
 
@@ -97,10 +103,15 @@ class Game {
       const content = await loadContent();
       this.tracks = content.tracks;
       this.vehicles = content.vehicles;
+      this.music.setPlaylist(content.music);
+      if (content.music.length > 0) this.music.request();
       for (const warning of content.warnings) console.warn(`[content] ${warning}`);
 
       const added = content.tracks.length - TRACKS.length + (content.vehicles.length - VEHICLES.length);
       if (added > 0) console.info(`[content] loaded ${added} custom item(s)`);
+      if (content.music.length > 0) {
+        console.info(`[content] ${content.music.length} music file(s) found`);
+      }
     } catch (error) {
       console.warn('[content] custom content failed to load', error);
     }
@@ -335,7 +346,7 @@ class Game {
 
   private showControls(): void {
     this.setScreen(
-      new ControlsScreen(this.detail, this.audio.isMuted, {
+      new ControlsScreen(this.detail, this.audio.isMuted, this.musicState(), {
         onBack: () => this.showTitle(),
         onDetailChange: (detail) => {
           this.detail = detail;
@@ -346,9 +357,30 @@ class Game {
           this.audio.setMuted(!this.audio.isMuted);
           return this.audio.isMuted;
         },
+        onToggleMusic: () => {
+          this.music.setEnabled(!this.music.isEnabled);
+          return this.musicState();
+        },
+        onCycleMusicVolume: () => {
+          // Four steps rather than a slider: the menu is driven by a
+          // d-pad, and a continuous control is miserable to nudge.
+          const steps = [0, 0.25, 0.55, 0.85];
+          const next = steps[(steps.findIndex((v) => v >= this.music.getVolume() - 1e-6) + 1) % steps.length];
+          this.music.setVolume(next);
+          return this.musicState();
+        },
       }),
       'controls',
     );
+  }
+
+  /** What the Controls screen needs to label its music rows. */
+  private musicState(): MusicState {
+    return {
+      available: this.music.hasMusic,
+      enabled: this.music.isEnabled,
+      volume: this.music.getVolume(),
+    };
   }
 
   private showTrackSelect(): void {
@@ -398,6 +430,8 @@ class Game {
 
     await nextFrame();
     this.disposeSession();
+
+    this.music.request(this.selectedTrack.music ?? null);
 
     const setup = {
       track: this.selectedTrack,

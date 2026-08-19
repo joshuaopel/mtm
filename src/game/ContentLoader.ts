@@ -17,11 +17,14 @@ import { VEHICLES } from '../data/vehicles';
 export interface ContentManifest {
   tracks?: string[];
   vehicles?: string[];
+  music?: string[];
 }
 
 export interface LoadedContent {
   tracks: MTMTrack[];
   vehicles: MTMVehicle[];
+  /** Resolved URLs of any audio dropped into the content folder. */
+  music: string[];
   /** Human-readable problems, surfaced in the console for content authors. */
   warnings: string[];
 }
@@ -51,6 +54,7 @@ function resolve(entry: string): string {
 export async function loadContent(): Promise<LoadedContent> {
   const tracks = [...TRACKS];
   const vehicles = [...VEHICLES];
+  const music: string[] = [];
   const warnings: string[] = [];
 
   // The generated index already merges anything a manifest listed, so the
@@ -64,12 +68,15 @@ export async function loadContent(): Promise<LoadedContent> {
       manifest = (await fetchJson(MANIFEST_URL)) as ContentManifest;
     } catch {
       // Neither present is the default state, not an error worth reporting.
-      return { tracks, vehicles, warnings };
+      return { tracks, vehicles, music, warnings };
     }
   }
 
   const trackFiles = manifest.tracks ?? [];
   const vehicleFiles = manifest.vehicles ?? [];
+  // Music is streamed by the player when it is wanted, so the URLs are just
+  // resolved here rather than fetched.
+  music.push(...(manifest.music ?? []).map(resolve));
 
   // Load everything in parallel; a slow or broken entry shouldn't hold up
   // the rest of the content.
@@ -112,5 +119,5 @@ export async function loadContent(): Promise<LoadedContent> {
     else vehicles.push(value);
   });
 
-  return { tracks, vehicles, warnings };
+  return { tracks, vehicles, music, warnings };
 }

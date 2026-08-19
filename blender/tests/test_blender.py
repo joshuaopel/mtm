@@ -403,6 +403,93 @@ class TestFullExport(BlenderCase):
         self.assertEqual([l["texture"] for l in paint_block["layers"]], ["dirt", "rock"])
 
 
+class TestColourPalette(BlenderCase):
+    def cube(self, name="Cube"):
+        bpy.ops.mesh.primitive_cube_add(size=1)
+        obj = bpy.context.object
+        obj.name = name
+        return obj
+
+    def select_only(self, obj):
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+    def test_applying_the_palette_gives_one_material_and_a_uv_layer(self):
+        from mtm_tools import palette
+
+        obj = self.cube()
+        self.select_only(obj)
+        self.assertEqual(bpy.ops.mtm.apply_palette(), {"FINISHED"})
+
+        self.assertEqual(len(obj.data.materials), 1)
+        self.assertEqual(obj.data.materials[0].name, palette.MATERIAL_NAME)
+        self.assertGreater(len(obj.data.uv_layers), 0)
+
+    def test_the_atlas_image_is_square_and_packed(self):
+        from mtm_tools import palette
+
+        palette.build_material()
+        image = bpy.data.images[palette.IMAGE_NAME]
+        self.assertEqual(tuple(image.size), (palette.COLUMNS * 16, palette.COLUMNS * 16))
+        self.assertTrue(image.packed_file, "the atlas must travel inside the .blend")
+
+    def test_the_image_holds_the_palette_colour_in_every_cell(self):
+        from mtm_tools import palette
+
+        palette.build_material()
+        image = bpy.data.images[palette.IMAGE_NAME]
+        size = image.size[0]
+        pixels = list(image.pixels)
+
+        def linear_to_srgb(c):
+            return 12.92 * c if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
+
+        for index, (name, hexcode) in enumerate(palette.PALETTE):
+            with self.subTest(colour=name):
+                u, v = palette.cell_uv(index)
+                offset = (int(v * size) * size + int(u * size)) * 4
+                got = tuple(round(linear_to_srgb(pixels[offset + k]) * 255) for k in range(3))
+                want = tuple(round(c * 255) for c in palette.hex_to_rgb(hexcode))
+                for a, b in zip(got, want):
+                    self.assertLessEqual(abs(a - b), 2)
+
+    def test_painting_moves_every_uv_onto_the_chosen_cell(self):
+        from mtm_tools import palette
+
+        obj = self.cube()
+        self.select_only(obj)
+        bpy.ops.mtm.apply_palette()
+
+        for index in (0, 5, 15):
+            with self.subTest(cell=index):
+                self.assertEqual(bpy.ops.mtm.paint_palette(index=index), {"FINISHED"})
+                expected = palette.cell_uv(index)
+                for loop in obj.data.uv_layers.active.data:
+                    self.assertAlmostEqual(loop.uv[0], expected[0], places=6)
+                    self.assertAlmostEqual(loop.uv[1], expected[1], places=6)
+
+    def test_painting_without_the_material_refuses_rather_than_silently_working(self):
+        obj = self.cube()
+        self.select_only(obj)
+        self.assertEqual(bpy.ops.mtm.paint_palette(index=3), {"CANCELLED"})
+
+    def test_two_objects_share_one_material(self):
+        from mtm_tools import palette
+
+        a, b = self.cube("A"), self.cube("B")
+        bpy.ops.object.select_all(action="DESELECT")
+        a.select_set(True)
+        b.select_set(True)
+        bpy.context.view_layer.objects.active = b
+        bpy.ops.mtm.apply_palette()
+
+        self.assertIs(a.data.materials[0], b.data.materials[0])
+        self.assertEqual(
+            len([m for m in bpy.data.materials if m.name.startswith(palette.MATERIAL_NAME)]), 1
+        )
+
+
 class TestPreview(BlenderCase):
     def test_preview_builds_terrain_and_road_meshes(self):
         bpy.ops.mtm.new_track(radius=200, points=10, preview=False)

@@ -18,18 +18,26 @@ import type { Plugin, ViteDevServer } from 'vite';
 const CONTENT_DIR = 'public/content';
 const INDEX_FILE = 'index.json';
 
+/** Audio the browser can stream. Ogg is included for Firefox-first authors. */
+const MUSIC_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.wav', '.opus', '.flac'];
+
 export interface ContentIndex {
   tracks: string[];
   vehicles: string[];
+  /** Any audio file found, used as background music. */
+  music: string[];
   /** Set when a hand-written manifest.json was found and merged. */
   manifest: boolean;
   generatedAt: string;
 }
 
 /** Recognise content by filename, which is what the exporters produce. */
-function classify(name: string): 'track' | 'vehicle' | null {
+function classify(name: string): 'track' | 'vehicle' | 'music' | null {
   if (name.endsWith('.mtmtrack.json')) return 'track';
   if (name.endsWith('.mtmvehicle.json')) return 'vehicle';
+  // Music needs no naming convention: drop a song in and it plays.
+  const lower = name.toLowerCase();
+  if (MUSIC_EXTENSIONS.some((ext) => lower.endsWith(ext))) return 'music';
   return null;
 }
 
@@ -38,6 +46,7 @@ export function scanContent(root: string): ContentIndex {
   const index: ContentIndex = {
     tracks: [],
     vehicles: [],
+    music: [],
     manifest: false,
     generatedAt: new Date().toISOString(),
   };
@@ -54,6 +63,7 @@ export function scanContent(root: string): ContentIndex {
     const kind = classify(entry);
     if (kind === 'track') index.tracks.push(entry);
     else if (kind === 'vehicle') index.vehicles.push(entry);
+    else if (kind === 'music') index.music.push(entry);
   }
 
   // A hand-written manifest can add files that don't follow the naming
@@ -65,6 +75,7 @@ export function scanContent(root: string): ContentIndex {
       const raw = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
         tracks?: string[];
         vehicles?: string[];
+        music?: string[];
       };
       index.manifest = true;
       for (const file of raw.tracks ?? []) {
@@ -72,6 +83,9 @@ export function scanContent(root: string): ContentIndex {
       }
       for (const file of raw.vehicles ?? []) {
         if (!index.vehicles.includes(file)) index.vehicles.push(file);
+      }
+      for (const file of raw.music ?? []) {
+        if (!index.music.includes(file)) index.music.push(file);
       }
     } catch (error) {
       console.warn(`[content] manifest.json is not valid JSON, ignoring it: ${error}`);
@@ -134,7 +148,8 @@ export function contentPlugin(): Plugin {
         fs.mkdirSync(outDir, { recursive: true });
         fs.writeFileSync(path.join(outDir, INDEX_FILE), JSON.stringify(index, null, 2));
         console.log(
-          `[content] indexed ${index.tracks.length} track(s) and ${index.vehicles.length} vehicle(s)`,
+          `[content] indexed ${index.tracks.length} track(s), ${index.vehicles.length} vehicle(s) ` +
+            `and ${index.music.length} music file(s)`,
         );
       } catch (error) {
         console.warn(`[content] could not write the content index: ${error}`);
