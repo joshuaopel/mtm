@@ -16,7 +16,7 @@ from bpy.types import Operator
 from mathutils import Vector
 
 from .collision import build_colliders
-from .heightmap import bake_heightmap, check_road_alignment, encode_heights
+from .heightmap import bake_surface, check_road_alignment, encode_heights, encode_paint
 from .convert import (
     box_yaw_degrees,
     convert_position,
@@ -200,6 +200,70 @@ def build_spawns(scene):
     ]
 
 
+def build_paint(scene, painted, bake_segments):
+    """
+    The terrain's ground textures, and where each one shows.
+
+    Returns None on 'Automatic', which leaves the field out of the track file
+    entirely — the game then picks layers from the surface theme. Writing an
+    explicit copy of the automatic behaviour would freeze it into every track
+    exported today and stop them benefiting when the defaults improve.
+    """
+    settings = scene.mtm_track
+    if settings.paint_mode != "custom":
+        return None
+
+    slots = (
+        (settings.paint_base, settings.paint_base_scale),
+        (settings.paint_layer1, settings.paint_layer1_scale),
+        (settings.paint_layer2, settings.paint_layer2_scale),
+        (settings.paint_layer3, settings.paint_layer3_scale),
+    )
+
+    layers = []
+    for texture, scale in slots:
+        name = texture.strip()
+        if not name:
+            # A blank slot ends the list: layer 3 cannot exist without layer 2,
+            # because the channels are positional.
+            break
+        layers.append({"texture": name, "scale": round(scale, 2)})
+
+    if not layers:
+        return None
+
+    paint = {"layers": layers}
+
+    rules = []
+    if settings.paint_slope_rule and len(layers) > 1:
+        rules.append(
+            {
+                "layer": 1,
+                "by": "slope",
+                "from": round(settings.paint_slope_from, 1),
+                "to": round(settings.paint_slope_to, 1),
+            }
+        )
+    if settings.paint_verge_rule and len(layers) > 2:
+        # Inverted range: strongest at the road, gone by the verge width.
+        rules.append(
+            {
+                "layer": 2,
+                "by": "road",
+                "from": round(settings.paint_verge_distance, 1),
+                "to": round(settings.paint_verge_distance * 0.35, 1),
+                "strength": 0.75,
+            }
+        )
+    if rules:
+        paint["rules"] = rules
+
+    if painted:
+        paint["weights"] = {"segments": bake_segments, "data": encode_paint(painted)}
+
+    return paint
+
+
 def terrain_size(scene, road):
     """
     Terrain extent: the bounds of a TERRAIN-role object if one exists,
@@ -211,8 +275,9 @@ def terrain_size(scene, road):
     """
     terrains = collect(scene, "TERRAIN")
     if terrains:
-        size, _ = local_bounds(terrains[0])
-        return max(100.0, max(size.x, size.y))
+        extent = terrain_object_extent(terrains[0])
+        if extent > 0.0:
+            return max(100.0, extent)
 
     if road:
         extent = 0.0
@@ -222,6 +287,25 @@ def terrain_size(scene, road):
         return max(200.0, (extent + 120.0) * 2.0)
 
     return scene.mtm_track.terrain_size
+
+
+def terrain_object_extent(obj):
+    """
+    Footprint of the Terrain-role object, or 0 if it does not have one.
+
+    An Empty has no bounding box at all — `bound_box` is eight zeroes — so the
+    display size is the only thing describing the box the author drew. Reading
+    the bounds alone silently collapsed every scaffolded track to the 100m
+    floor while the course ran for hundreds of metres outside it.
+    """
+    if obj.type == "EMPTY":
+        # `empty_display_size` is the half-extent of the drawn cube, before
+        # object scale.
+        scale = obj.matrix_world.to_scale()
+        return obj.empty_display_size * 2.0 * max(abs(scale.x), abs(scale.y))
+
+    size, _ = local_bounds(obj)
+    return max(size.x, size.y)
 
 
 def export_scenery_gltf(context, json_path, problems):
@@ -320,6 +404,9 @@ def build_track(context, problems):
     # Sculpted terrain is sampled onto the runtime's height grid at export,
     # so the mesh in the .blend stays the single source of truth rather than
     # a cache that can go stale.
+    bake_segments = int(settings.heightmap_segments)
+    painted = None
+
     if settings.terrain_source == "sculpted":
         terrains = collect(scene, "TERRAIN")
         if not terrains:
@@ -327,8 +414,14 @@ def build_track(context, problems):
                 "Terrain is set to 'Sculpted Mesh' but no object has the Terrain role."
             )
         else:
-            bake_segments = int(settings.heightmap_segments)
-            heights = bake_heightmap(terrains[0], depsgraph, size, bake_segments, problems)
+            heights, painted = bake_surface(
+                terrains[0],
+                depsgraph,
+                size,
+                bake_segments,
+                problems,
+                want_paint=settings.paint_mode == "custom",
+            )
             if heights:
                 check_road_alignment(
                     heights,
@@ -344,6 +437,10 @@ def build_track(context, problems):
                     "data": encode_heights(heights),
                     "flattenRoad": bool(settings.heightmap_flatten_road),
                 }
+
+    paint = build_paint(scene, painted, bake_segments)
+    if paint:
+        track.setdefault("environment", {}).setdefault("artwork", {})["paint"] = paint
 
     colliders = build_colliders(scene, depsgraph, collect, problems)
     if colliders:

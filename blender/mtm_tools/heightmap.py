@@ -17,12 +17,14 @@ import struct
 
 from mathutils import Vector
 
+from . import paint as paint_module
+
 # How far above the terrain the sampling ray starts. Generous, because the
 # author's mesh could be anywhere.
 RAY_HEIGHT = 10000.0
 
 
-def bake_heightmap(obj, depsgraph, size, segments, problems):
+def bake_surface(obj, depsgraph, size, segments, problems, want_paint=False):
     """
     Sample a mesh onto a (segments+1)^2 grid by casting rays straight down.
 
@@ -30,21 +32,29 @@ def bake_heightmap(obj, depsgraph, size, segments, problems):
     x and z running from -size/2 to +size/2 — so it drops straight into the
     runtime's own height array.
 
-    Returns the height list, or None if the mesh could not be sampled.
+    Height and paint come out of the same ray because they are answers about
+    the same point on the same surface; casting twice would double the cost of
+    a bake for nothing. Returns `(heights, paint_bytes)` where paint is None
+    unless asked for and actually painted, or `(None, None)` if the mesh could
+    not be sampled at all.
     """
     if obj.type != "MESH":
         problems.append(
             f"'{obj.name}' is the Terrain object but is not a mesh. "
             "Switch Terrain to 'Generated', or give the role to a mesh."
         )
-        return None
+        return None, None
 
     evaluated = obj.evaluated_get(depsgraph)
+    mesh = evaluated.data
     matrix = evaluated.matrix_world
     inverse = matrix.inverted()
     # Ray directions are transformed by the rotation only; a direction has no
     # translation, and using the full matrix would skew it.
     direction_local = (inverse.to_3x3() @ Vector((0.0, 0.0, -1.0))).normalized()
+
+    layer = paint_module.find_attribute(mesh) if want_paint else None
+    packed = bytearray() if layer is not None else None
 
     element = size / segments
     heights = []
@@ -59,14 +69,21 @@ def bake_heightmap(obj, depsgraph, size, segments, problems):
             world = Vector((gx, -gz, RAY_HEIGHT))
 
             origin_local = inverse @ world
-            hit, location, _, _ = evaluated.ray_cast(origin_local, direction_local)
+            hit, location, _, face = evaluated.ray_cast(origin_local, direction_local)
             if hit:
                 heights.append((matrix @ location).z)
+                if packed is not None:
+                    colour = paint_module.sample_colour(
+                        mesh, layer, location, mesh.polygons[face]
+                    )
+                    packed.extend(paint_module.clamp_byte(c) for c in colour)
             else:
                 # No surface under this point. Zero keeps the grid flat there
                 # rather than punching a hole in the world.
                 heights.append(0.0)
                 misses += 1
+                if packed is not None:
+                    packed.extend((0, 0, 0))
 
     total = len(heights)
     if misses == total:
@@ -74,7 +91,7 @@ def bake_heightmap(obj, depsgraph, size, segments, problems):
             f"'{obj.name}' was not hit by any sampling ray. It probably does not "
             "cover the terrain area, or its normals are inverted."
         )
-        return None
+        return None, None
 
     if misses > total * 0.25:
         problems.append(
@@ -83,7 +100,16 @@ def bake_heightmap(obj, depsgraph, size, segments, problems):
             "areas will be flat at zero."
         )
 
-    return heights
+    if packed is not None and paint_module.is_blank(packed):
+        # Everything is the base layer, which the game assumes anyway.
+        packed = None
+
+    return heights, packed
+
+
+def encode_paint(packed):
+    """Base64 the painted RGB bytes, three per grid vertex."""
+    return base64.b64encode(bytes(packed)).decode("ascii")
 
 
 def encode_heights(heights):

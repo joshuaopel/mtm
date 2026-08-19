@@ -59,6 +59,81 @@ export interface TrackArtwork {
    * that you want to stay smooth.
    */
   pixelated?: boolean;
+  /**
+   * Blend several textures across the terrain instead of tiling one.
+   *
+   * Takes precedence over `ground` when present. See `TerrainPaint`.
+   */
+  paint?: TerrainPaint;
+}
+
+/**
+ * Multi-texture terrain.
+ *
+ * Up to four layers are blended per-vertex. Where the weights come from is the
+ * only choice the author makes: `weights` if they painted the terrain in
+ * Blender, `rules` if they would rather describe the landscape than paint it,
+ * and both is fine — rules fill in wherever the painting left the base layer.
+ *
+ * Four is not arbitrary. The weights ride in a single vertex attribute, and
+ * four texture fetches per fragment is what the blend costs; a fifth layer
+ * doubles the attribute and adds a fetch for the whole terrain to buy one more
+ * material. Four covers ground / worn / rock / peak, which is the vocabulary
+ * of a period racing surface.
+ */
+export interface TerrainPaint {
+  /**
+   * Layer 0 is the base and shows wherever nothing else outweighs it.
+   * Layers beyond the fourth are ignored.
+   */
+  layers: TerrainLayer[];
+  /**
+   * Painted weights: base64 RGB bytes, one triplet per grid vertex, row-major
+   * and indexed as `iz * (segments + 1) + ix` like the heightmap. The three
+   * channels weight layers 1, 2 and 3; layer 0 takes whatever is left.
+   */
+  weights?: TerrainWeights;
+  /** Weights derived from the shape of the land. Applied under `weights`. */
+  rules?: TerrainPaintRule[];
+}
+
+export interface TerrainLayer {
+  /** A built-in surface name, or a URL to an image. */
+  texture: string;
+  /** Metres per tile. Smaller repeats faster; 8 matches the built-in ground. */
+  scale?: number;
+  /** Hex tint multiplied over the texture, for reusing one image as several. */
+  tint?: string;
+}
+
+export interface TerrainWeights {
+  /** Grid resolution the weights were baked at; `data` is (segments + 1)^2 RGB. */
+  segments: number;
+  /** Base64-encoded RGB bytes, three per vertex. */
+  data: string;
+}
+
+/**
+ * One ramp from a property of the terrain to a layer's weight.
+ *
+ * `from`/`to` bracket the ramp: below `from` the layer contributes nothing, at
+ * `to` it contributes `strength`. Inverting them (`from` greater than `to`)
+ * runs the ramp the other way, which is how you get a layer that appears on
+ * *flat* ground or *low* ground.
+ */
+export interface TerrainPaintRule {
+  /** Index into `layers`. Rule on layer 0 is ignored; it is the base. */
+  layer: number;
+  /**
+   * - `slope`: surface angle in degrees, 0 flat and 90 vertical.
+   * - `height`: world height in metres.
+   * - `road`: horizontal distance from the racing line in metres.
+   */
+  by: 'slope' | 'height' | 'road';
+  from: number;
+  to: number;
+  /** Peak weight this rule contributes, 0..1. Defaults to 1. */
+  strength?: number;
 }
 
 /**

@@ -252,6 +252,31 @@ const SURFACE_PRESETS: Record<string, { ground: SurfaceOptions; road: SurfaceOpt
       streak: 0.6,
     },
   },
+  // Not a track surface you would set on its own — this is the layer that
+  // shows through on anything steep, so it is deliberately high-contrast and
+  // coarse to read as broken stone at a distance.
+  rock: {
+    ground: {
+      base: '#7d7468',
+      layers: [
+        { color: '#6a6157', amount: 4 },
+        { color: '#938a7c', amount: 3 },
+        { color: '#4f4841', amount: 3 },
+      ],
+      scale: 2.4,
+      grain: 0.22,
+    },
+    road: {
+      base: '#736a5e',
+      layers: [
+        { color: '#5f574d', amount: 4 },
+        { color: '#8a8072', amount: 3 },
+      ],
+      scale: 1.2,
+      grain: 0.16,
+      streak: 0.4,
+    },
+  },
 };
 
 const WALL_PRESETS: Record<string, SurfaceOptions> = {

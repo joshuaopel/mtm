@@ -9,6 +9,7 @@ import type {
   TerrainHeightmap,
 } from './formats';
 import type { RoadPath } from './RoadPath';
+import { MAX_LAYERS, buildLayerWeights, paintMaterial, resolvePaint } from './TerrainPaint';
 
 /**
  * Heightfield terrain.
@@ -42,7 +43,7 @@ export class Terrain {
     this.heights = new Float32Array((config.segments + 1) ** 2);
 
     this.generateHeights(config, road);
-    this.mesh = this.buildMesh(surface, artwork);
+    this.mesh = this.buildMesh(surface, road, artwork);
     this.body = this.buildBody();
   }
 
@@ -185,7 +186,46 @@ export class Terrain {
     }
   }
 
-  private buildMesh(surface: string, artwork?: TrackArtwork): THREE.Mesh {
+  /**
+   * Terrain material: a blend of up to four surfaces, or a single tiled image
+   * when the track explicitly asks for one.
+   */
+  private buildMaterial(
+    geometry: THREE.BufferGeometry,
+    surface: string,
+    road: RoadPath,
+    artwork?: TrackArtwork,
+  ): THREE.MeshLambertMaterial {
+    const paint = resolvePaint(surface, artwork);
+
+    if (paint) {
+      const weights = buildLayerWeights(paint, {
+        segments: this.segments,
+        size: this.size,
+        heights: this.heights,
+        normals: geometry.attributes.normal as THREE.BufferAttribute,
+        positions: geometry.attributes.position as THREE.BufferAttribute,
+        road,
+      });
+      geometry.setAttribute('layerWeight', new THREE.BufferAttribute(weights, MAX_LAYERS));
+      return paintMaterial(paint, this.size, artwork?.pixelated);
+    }
+
+    // Repeat defaults to one tile per 8m so hand-drawn ground lands at
+    // roughly the same scale as the generated textures.
+    const repeat = artwork?.groundRepeat ?? this.size / 8;
+    const map = artwork?.ground
+      ? imageTexture(artwork.ground, {
+          repeatX: repeat,
+          repeatY: repeat,
+          pixelated: artwork.pixelated,
+        })
+      : groundTexture(surface, this.size / 8);
+
+    return new THREE.MeshLambertMaterial({ map, vertexColors: true, flatShading: true });
+  }
+
+  private buildMesh(surface: string, road: RoadPath, artwork?: TrackArtwork): THREE.Mesh {
     const geometry = new THREE.PlaneGeometry(this.size, this.size, this.segments, this.segments);
     geometry.rotateX(-Math.PI / 2);
 
@@ -213,23 +253,7 @@ export class Terrain {
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Custom artwork when the track supplies it, the procedural theme
-    // otherwise. Repeat defaults to one tile per 8m so hand-drawn ground
-    // lands at roughly the same scale as the generated textures.
-    const repeat = artwork?.groundRepeat ?? this.size / 8;
-    const map = artwork?.ground
-      ? imageTexture(artwork.ground, {
-          repeatX: repeat,
-          repeatY: repeat,
-          pixelated: artwork.pixelated,
-        })
-      : groundTexture(surface, this.size / 8);
-
-    const material = new THREE.MeshLambertMaterial({
-      map,
-      vertexColors: true,
-      flatShading: true,
-    });
+    const material = this.buildMaterial(geometry, surface, road, artwork);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'terrain';

@@ -20,6 +20,13 @@ import unittest
 
 sys.modules["mathutils"] = types.ModuleType("mathutils")
 sys.modules["mathutils"].Vector = tuple
+# `paint` reaches into mathutils.interpolate for barycentric weights, which
+# only exists inside Blender. Nothing under test here calls it.
+_interpolate = types.ModuleType("mathutils.interpolate")
+_interpolate.poly_3d_calc = None
+sys.modules["mathutils.interpolate"] = _interpolate
+sys.modules["mathutils"].interpolate = _interpolate
+
 _ADDON = os.path.join(os.path.dirname(__file__), "..", "mtm_tools")
 _package = types.ModuleType("mtm_tools")
 _package.__path__ = [_ADDON]

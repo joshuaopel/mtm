@@ -256,6 +256,63 @@ class MTMTrackProps(PropertyGroup):
     terrain_frequency: FloatProperty(name="Frequency", default=0.01, min=0.0001, precision=4)
     terrain_seed: IntProperty(name="Seed", default=1234)
 
+    # Terrain paint
+    paint_mode: EnumProperty(
+        name="Ground Texture",
+        items=[
+            (
+                "auto",
+                "Automatic",
+                "The game blends rock onto steep ground and wears a verge along "
+                "the road, chosen from the Surface theme. Nothing to set up",
+            ),
+            (
+                "custom",
+                "Choose Layers",
+                "Pick the four ground textures yourself, and optionally paint "
+                "where each one shows",
+            ),
+        ],
+        default="auto",
+    )
+    paint_base: StringProperty(
+        name="Base",
+        default="dirt",
+        description="Ground everywhere nothing else is painted. A built-in "
+        "surface name (dirt, sand, snow, mud, slag, grass, rock) or an image path",
+    )
+    paint_layer1: StringProperty(name="Layer 1 (Red)", default="rock")
+    paint_layer2: StringProperty(name="Layer 2 (Green)", default="")
+    paint_layer3: StringProperty(name="Layer 3 (Blue)", default="")
+    paint_base_scale: FloatProperty(name="Base Tile", default=8.0, min=0.5, subtype="DISTANCE")
+    paint_layer1_scale: FloatProperty(name="Tile", default=11.0, min=0.5, subtype="DISTANCE")
+    paint_layer2_scale: FloatProperty(name="Tile", default=8.0, min=0.5, subtype="DISTANCE")
+    paint_layer3_scale: FloatProperty(name="Tile", default=8.0, min=0.5, subtype="DISTANCE")
+    paint_slope_rule: BoolProperty(
+        name="Layer 1 On Steep Ground",
+        default=True,
+        description="Blend layer 1 in as the ground gets steeper, so cliffs read "
+        "as rock without painting them",
+    )
+    # Degrees, stored plain rather than as Blender angles so the number in the
+    # panel is the number written to the track file.
+    paint_slope_from: FloatProperty(
+        name="Starts At", default=32.0, min=0.0, max=90.0,
+        description="Slope in degrees where layer 1 starts to show",
+    )
+    paint_slope_to: FloatProperty(
+        name="Full At", default=52.0, min=0.0, max=90.0,
+        description="Slope in degrees where layer 1 covers the ground completely",
+    )
+    paint_verge_rule: BoolProperty(
+        name="Layer 2 Along The Road",
+        default=False,
+        description="Blend layer 2 in near the racing line, for a worn verge",
+    )
+    paint_verge_distance: FloatProperty(
+        name="Verge Width", default=26.0, min=1.0, subtype="DISTANCE"
+    )
+
     # Environment
     surface: EnumProperty(name="Surface", items=SURFACES, default="dirt")
     sky_zenith: FloatVectorProperty(

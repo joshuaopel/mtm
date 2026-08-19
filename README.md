@@ -121,6 +121,7 @@ src/
     formats.ts         MTMTrack / MTMVehicle schemas (the Blender contract)
     RoadPath.ts        racing line: road ribbon, terrain carve, AI path
     Terrain.ts         heightfield mesh + cannon collision from one array
+    TerrainPaint.ts    four-layer ground blend, weights from rules or painting
     Track.ts           assembles scene, physics bodies, gates, spawns
     Props.ts           low-poly scenery
     Vehicle.ts         raycast vehicle + arcade control layer
@@ -173,17 +174,28 @@ The Blender add-on in `blender/` is the editor for both tracks and vehicles.
 See [`blender/README.md`](blender/README.md) for the full workflow; the short
 version:
 
-**Levels.** Tag objects with a role — road spline, collider, scenery, wall,
-prop, spawn, checkpoint, terrain feature — and export. Tools generate start
+**Levels.** [`docs/making-tracks.md`](docs/making-tracks.md) walks the whole
+thing end to end. In short: tag objects with a role — road spline, collider,
+scenery, wall, prop, spawn, checkpoint, terrain feature — and export. Tools generate start
 grids, checkpoint runs, barrier walls and roadside scatter along the road.
 Scenery meshes go out as a `.glb` beside the JSON.
 
 You don't model the road or the ground: both are generated from the track file
 at load time. **Build Course Preview** builds them as meshes in Blender, using
 a Python port of the game's own generation code, so you author against the
-terrain you will actually drive on. If you'd rather sculpt the landscape by
-hand, switch Terrain Source to **Sculpted Mesh** and the exporter bakes your
-mesh into the heightfield.
+terrain you will actually drive on.
+
+If you'd rather sculpt by hand, switch Terrain Source to **Sculpted Mesh**. A
+Geometry Nodes modifier carves the road into your sculpt and re-evaluates as
+you drag the spline, so the road cuts its own corridor while you work; the
+sculpt itself is never edited. The exporter bakes the evaluated mesh into the
+heightfield.
+
+**Ground textures** blend up to four surfaces across the terrain. By default the
+game picks them from the surface theme — rock on anything steeper than 32°, a
+worn verge along the racing line — so every track gets layered ground for free.
+Choose your own layers and vertex-paint the terrain when you want to say exactly
+where each one goes.
 
 **Collision** is authored separately from what you see, and must be convex:
 the physics engine resolves boxes and convex hulls properly but not concave
@@ -253,12 +265,20 @@ python3 blender/tests/test_collision.py  # collider convexity check
 python3 blender/tests/test_handling.py   # derived handling numbers
 python3 blender/tests/test_generate.py   # terrain and road generation
 python3 blender/tests/test_heightmap.py  # sculpted-terrain bake
+python3 blender/tests/test_blender.py    # the add-on inside Blender (needs bpy)
 ```
 
 These cover things whose failure mode is invisible: a wrong axis gives a
 silently mirrored track, a concave collider exports and loads perfectly before
 letting trucks drive through walls at speed, and a drifted generation port
 gives you a Blender preview of a course the game will never build.
+
+The first four stub `bpy` out and run anywhere. `test_blender.py` loads the
+add-on into a real headless Blender (`pip install bpy` in a venv) and drives it
+through scaffold, carve, paint and export. It skips itself when `bpy` is
+missing, and it earns its keep: it immediately found that every scaffolded track
+was exporting a 100m terrain patch for a 700m course, because an Empty reports
+an all-zero bounding box and the size was read from `bound_box`.
 
 ## Steam
 

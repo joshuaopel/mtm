@@ -3,7 +3,9 @@
 Authoring tools for Monster Truck Madness tracks and vehicles. Exports the
 JSON formats defined in `src/game/formats.ts`.
 
-Tested against Blender 3.x and 4.x.
+Tested against Blender 5.0 (the suite in `tests/test_blender.py` runs the
+add-on headlessly); best-effort on 3.x and 4.x, where the node-group and
+property APIs differ in places the add-on guards for but cannot exercise here.
 
 ## Install
 
@@ -30,6 +32,10 @@ without leaking into the track.
 | Terrain Feature | Empty | A hill, crater or plateau |
 | Collider | Mesh | An invisible collision volume |
 | Scenery Mesh | Mesh | Visual geometry exported into the track's `.glb` |
+
+**New here?** [`docs/making-tracks.md`](../docs/making-tracks.md) is the
+end-to-end guide — empty scene to something you can drive. The rest of this
+file is the reference.
 
 ### You do not model the terrain or the road
 
@@ -101,6 +107,49 @@ spend an evening modelling:
 
 In sculpted mode the preview builds only the road ribbon — your mesh is already
 the ground, and generating a second one would bury it.
+
+**New Sculpted Terrain** builds a grid sized to your course, tags it, sets
+Terrain Source for you, and adds the road carve below. It is the quickest way
+to get something to sculpt.
+
+### The live road carve
+
+**Add / Update Road Carve** puts a Geometry Nodes modifier on the terrain that
+flattens the ground under the road curve and blends back out across the
+shoulder — re-evaluating as you drag the spline. Move the road and the trench
+moves with it; move it away and the old line springs back to the sculpt.
+
+It is a modifier, not an edit: the sculpt stays in the base mesh, so the carve
+can be retuned or removed with nothing lost. The exporter bakes the *evaluated*
+mesh, so what you see is what ships.
+
+Re-run it after changing Road Width or Shoulder — the modifier holds its own
+copy of those numbers.
+
+### Ground textures
+
+The terrain blends up to four tiled textures, and the **Ground Textures** panel
+decides how.
+
+**Automatic** needs no setup: the game picks layers from the Surface theme,
+blending rock onto steep ground and wearing a verge along the racing line. The
+slope ramp runs 32°-52°, measured rather than guessed — starting at 20° turned
+nearly half of the built-in courses to rock, because rolling terrain spends a
+lot of its area between 20° and 40°.
+
+**Choose Layers** lets you name the four textures — a built-in surface (`dirt`,
+`sand`, `snow`, `mud`, `slag`, `grass`, `rock`) or an image path — with metres
+per tile for each. A blank slot ends the list; the channels are positional, so
+layer 3 cannot exist without layer 2.
+
+Then **Paint Terrain** drops you into Vertex Paint with the attribute set up.
+Red, green and blue each select a layer; black is the base. The layer buttons
+set the brush colour for you. That is the whole interface: no UV unwrap, no
+image file to keep track of, and the paint travels in the `.blend`. At export it
+bakes onto the same grid as the heights.
+
+Painting needs a sculpted terrain — there is no mesh to paint on otherwise — and
+it wins over the automatic rules wherever you painted.
 
 ### A typical session
 
@@ -265,6 +314,20 @@ python3 blender/tests/test_handling.py   # derived handling numbers
 python3 blender/tests/test_generate.py   # terrain and road generation
 python3 blender/tests/test_heightmap.py  # sculpted-terrain bake
 ```
+
+Those stub `bpy` out, so they run anywhere but can only see pure-Python
+helpers. `test_blender.py` runs the add-on inside Blender itself — registering
+it, scaffolding a track, carving, painting, exporting, and asserting on the
+JSON that comes out. It skips itself when `bpy` is missing:
+
+```bash
+python3 -m venv .bpyenv && .bpyenv/bin/pip install bpy
+.bpyenv/bin/python blender/tests/test_blender.py
+```
+
+It is worth the setup. The bug where every scaffolded track exported a 100m
+terrain patch for a 700m course — an Empty reports an all-zero bounding box —
+was invisible to every unit test and obvious within one operator call.
 
 `test_generate.py` is the one that keeps the preview honest. It pins the noise
 and the road spline to reference values printed from the game's own code —

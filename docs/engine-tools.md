@@ -30,13 +30,21 @@ Build tools generate start grids, checkpoint runs, barrier walls and roadside
 scatter along the road. Colours-by-role and select-untagged make a big scene
 readable.
 
+**Ground is layered, not one tiled image.** The terrain blends up to four
+surfaces from a weight per vertex, injected into the standard Lambert material
+so fog, flat shading and the post pass keep working. Weights come from rules
+about the shape of the land (rock above 32 degrees, a worn verge along the
+racing line) or from vertex painting in Blender, and the shader cannot tell
+which it got. Tracks that say nothing about paint still get the rules.
+
 **Blender shows you the course before you export it.** The road ribbon and the
 generated terrain don't exist as geometry in the .blend — the game builds both
 at load time — so authoring used to be editing a curve in empty space. The
 Course Preview builds them as real meshes from a Python port of the game's own
 generation code, verified against the TypeScript to within the float32 the
 runtime stores heights in. If you would rather sculpt, a mesh tagged Terrain
-bakes onto the same grid at export.
+bakes onto the same grid at export, with a Geometry Nodes modifier carving the
+road into it live as you drag the spline.
 
 **Blender is the vehicle editor.** The reference rig draws the physics — the
 chassis box, wheel positions at droop/rest/bump, the ground plane, and the

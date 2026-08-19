@@ -10,6 +10,7 @@ import bpy
 from bpy.types import Panel
 
 from .handling import damping_verdict, handling_numbers, wheelie_verdict
+from .paint import LAYER_COLOURS
 
 
 class MTMPanel:
@@ -68,14 +69,75 @@ class MTM_PT_track_road(MTMPanel, Panel):
             column.prop(settings, "terrain_frequency")
             column.prop(settings, "terrain_seed")
         else:
-            box.label(text="Give a mesh the Terrain role, then sculpt it.", icon="INFO")
+            column = box.column(align=True)
+            column.scale_y = 1.2
+            column.operator("mtm.new_sculpted_terrain", icon="MESH_GRID")
             box.label(text="Heightfield: no overhangs or caves.", icon="ERROR")
             column = box.column(align=True)
             column.prop(settings, "heightmap_segments")
             column.prop(settings, "heightmap_flatten_road")
 
+            row = box.row(align=True)
+            row.operator("mtm.add_road_carve", icon="MOD_SHRINKWRAP")
+            row.operator("mtm.remove_road_carve", text="", icon="X")
+            box.label(text="The carve follows the spline as you move it", icon="INFO")
+
         box.prop(settings, "terrain_segments")
         box.label(text="Size follows the Terrain object's bounds", icon="INFO")
+
+
+class MTM_PT_track_paint(MTMPanel, Panel):
+    bl_label = "Ground Textures"
+    bl_idname = "MTM_PT_track_paint"
+    bl_parent_id = "MTM_PT_track"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.scene.mtm_track
+
+        layout.prop(settings, "paint_mode", expand=True)
+
+        if settings.paint_mode == "auto":
+            layout.label(text="Rock on steep ground, worn verge by the road.", icon="INFO")
+            layout.label(text="Chosen from the Surface theme.")
+            return
+
+        box = layout.box()
+        box.label(text="Layers", icon="TEXTURE")
+        for prop, scale in (
+            ("paint_base", "paint_base_scale"),
+            ("paint_layer1", "paint_layer1_scale"),
+            ("paint_layer2", "paint_layer2_scale"),
+            ("paint_layer3", "paint_layer3_scale"),
+        ):
+            row = box.row(align=True)
+            row.prop(settings, prop, text="")
+            row.prop(settings, scale, text="")
+        box.label(text="Blank stops the list. Name or image path.", icon="INFO")
+
+        box = layout.box()
+        box.label(text="Automatic Blending", icon="MOD_NOISE")
+        box.prop(settings, "paint_slope_rule")
+        if settings.paint_slope_rule:
+            row = box.row(align=True)
+            row.prop(settings, "paint_slope_from")
+            row.prop(settings, "paint_slope_to")
+        box.prop(settings, "paint_verge_rule")
+        if settings.paint_verge_rule:
+            box.prop(settings, "paint_verge_distance")
+
+        box = layout.box()
+        box.label(text="Painting", icon="BRUSH_DATA")
+        if context.scene.mtm_track.terrain_source != "sculpted":
+            box.label(text="Painting needs a sculpted terrain mesh.", icon="ERROR")
+            return
+
+        box.operator("mtm.terrain_paint", icon="VPAINT_HLT")
+        row = box.row(align=True)
+        for index, (name, _, _) in enumerate(LAYER_COLOURS):
+            row.operator("mtm.set_paint_layer", text=name).layer = index
+        box.operator("mtm.clear_terrain_paint", icon="TRASH")
 
 
 class MTM_PT_track_preview(MTMPanel, Panel):
@@ -444,6 +506,7 @@ class MTM_PT_vehicle_export(MTMPanel, Panel):
 _CLASSES = (
     MTM_PT_track,
     MTM_PT_track_road,
+    MTM_PT_track_paint,
     MTM_PT_track_preview,
     MTM_PT_track_environment,
     MTM_PT_track_build,
