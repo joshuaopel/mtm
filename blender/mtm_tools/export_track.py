@@ -16,6 +16,7 @@ from bpy.types import Operator
 from mathutils import Vector
 
 from .collision import build_colliders
+from .heightmap import bake_heightmap, check_road_alignment, encode_heights
 from .convert import (
     box_yaw_degrees,
     convert_position,
@@ -203,6 +204,10 @@ def terrain_size(scene, road):
     """
     Terrain extent: the bounds of a TERRAIN-role object if one exists,
     otherwise sized to comfortably contain the road.
+
+    With a sculpted terrain this is the mesh's own footprint, which is what
+    makes "model the landscape, export, drive it" line up without the author
+    having to type a size anywhere.
     """
     terrains = collect(scene, "TERRAIN")
     if terrains:
@@ -279,6 +284,8 @@ def build_track(context, problems):
     if road is None:
         return None
 
+    size = terrain_size(scene, road)
+
     track = {
         "format": FORMAT,
         "version": VERSION,
@@ -298,7 +305,7 @@ def build_track(context, problems):
             "surface": settings.surface,
         },
         "terrain": {
-            "size": round(terrain_size(scene, road), 2),
+            "size": round(size, 2),
             "segments": int(settings.terrain_segments),
             "amplitude": round(settings.terrain_amplitude, 3),
             "frequency": round(settings.terrain_frequency, 5),
@@ -309,6 +316,34 @@ def build_track(context, problems):
         "walls": build_walls(scene),
         "props": build_props(scene),
     }
+
+    # Sculpted terrain is sampled onto the runtime's height grid at export,
+    # so the mesh in the .blend stays the single source of truth rather than
+    # a cache that can go stale.
+    if settings.terrain_source == "sculpted":
+        terrains = collect(scene, "TERRAIN")
+        if not terrains:
+            problems.append(
+                "Terrain is set to 'Sculpted Mesh' but no object has the Terrain role."
+            )
+        else:
+            bake_segments = int(settings.heightmap_segments)
+            heights = bake_heightmap(terrains[0], depsgraph, size, bake_segments, problems)
+            if heights:
+                check_road_alignment(
+                    heights,
+                    size,
+                    bake_segments,
+                    road,
+                    settings.road_shoulder,
+                    bool(settings.heightmap_flatten_road),
+                    problems,
+                )
+                track["terrain"]["heightmap"] = {
+                    "segments": bake_segments,
+                    "data": encode_heights(heights),
+                    "flattenRoad": bool(settings.heightmap_flatten_road),
+                }
 
     colliders = build_colliders(scene, depsgraph, collect, problems)
     if colliders:

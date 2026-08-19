@@ -30,6 +30,14 @@ Build tools generate start grids, checkpoint runs, barrier walls and roadside
 scatter along the road. Colours-by-role and select-untagged make a big scene
 readable.
 
+**Blender shows you the course before you export it.** The road ribbon and the
+generated terrain don't exist as geometry in the .blend — the game builds both
+at load time — so authoring used to be editing a curve in empty space. The
+Course Preview builds them as real meshes from a Python port of the game's own
+generation code, verified against the TypeScript to within the float32 the
+runtime stores heights in. If you would rather sculpt, a mesh tagged Terrain
+bakes onto the same grid at export.
+
 **Blender is the vehicle editor.** The reference rig draws the physics — the
 chassis box, wheel positions at droop/rest/bump, the ground plane, and the
 centre of mass — so you can model against what the simulation actually
@@ -55,12 +63,12 @@ These shape what tooling is worth building.
   A concave collider silently lets truck bodies through. Concave shapes have
   to be authored as several convex pieces — hence the convexity check in the
   exporter rather than a "just works" auto-collider.
-- **Terrain is procedural, not sculpted.** The ground is a heightfield
-  generated from noise plus authored features, and the same array feeds the
-  visible mesh, the physics heightfield, and height queries. Importing a
-  sculpted terrain mesh means either baking it to a heightfield (loses
-  overhangs, which the heightfield can't represent anyway) or moving to
-  trimesh collision (see above). The feature-based approach sidesteps both.
+- **The ground is a heightfield, whichever way it is authored.** One height
+  array feeds the visible mesh, the physics heightfield and the height queries.
+  The default is procedural — noise plus authored features — and sculpting is
+  supported by baking a mesh onto that same grid at export, which is why
+  overhangs and caves are out either way. The alternative was trimesh
+  collision, and that runs straight into the convexity limit above.
 - **Race construction is synchronous.** Everything from the network has to be
   resolved first. That's why there's a `collectModelUrls` pass.
 - **The look is a budget, not a filter.** 320x240, flat shading, no shadows.

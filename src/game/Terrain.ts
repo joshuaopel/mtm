@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { ValueNoise2D, clamp, smootherstep } from '../core/Noise';
 import { groundTexture, imageTexture } from '../core/Textures';
-import type { TrackTerrain, TerrainFeature, TrackArtwork } from './formats';
+import type {
+  TrackTerrain,
+  TerrainFeature,
+  TrackArtwork,
+  TerrainHeightmap,
+} from './formats';
 import type { RoadPath } from './RoadPath';
 
 /**
@@ -56,6 +61,18 @@ export class Terrain {
   }
 
   private generateHeights(config: TrackTerrain, road: RoadPath): void {
+    // A baked heightmap replaces the noise entirely, but still gets the road
+    // carved into it unless the author opted out.
+    if (config.heightmap) {
+      const baked = decodeHeightmap(config.heightmap, this.segments);
+      if (baked) {
+        this.heights.set(baked);
+        if (config.heightmap.flattenRoad !== false) this.flattenAlongRoad(road);
+        return;
+      }
+      console.warn('[terrain] heightmap failed to decode; falling back to procedural terrain');
+    }
+
     const noise = new ValueNoise2D(config.seed);
     const n = this.segments;
 
@@ -279,6 +296,65 @@ export class Terrain {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
   }
+}
+
+/**
+ * Decode a baked heightmap, resampling if it was authored at a different
+ * resolution than the track's terrain grid.
+ *
+ * Returns null on any inconsistency rather than throwing, so a malformed
+ * heightmap costs the track its sculpted ground rather than failing to load.
+ */
+export function decodeHeightmap(
+  heightmap: TerrainHeightmap,
+  segments: number,
+): Float32Array | null {
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(heightmap.data);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  } catch {
+    return null;
+  }
+
+  if (bytes.byteLength % 4 !== 0) return null;
+  // Copy into an aligned buffer: the byte array from atob has no alignment
+  // guarantee, and Float32Array demands a 4-byte boundary.
+  const aligned = new Uint8Array(bytes.byteLength);
+  aligned.set(bytes);
+  const source = new Float32Array(aligned.buffer);
+
+  const sourceSegments = heightmap.segments;
+  const expected = (sourceSegments + 1) ** 2;
+  if (source.length !== expected) return null;
+
+  if (sourceSegments === segments) return source;
+
+  // Bilinear resample onto the track's own grid.
+  const target = new Float32Array((segments + 1) ** 2);
+  const scale = sourceSegments / segments;
+  for (let iz = 0; iz <= segments; iz++) {
+    for (let ix = 0; ix <= segments; ix++) {
+      const fx = ix * scale;
+      const fz = iz * scale;
+      const x0 = Math.min(sourceSegments - 1, Math.floor(fx));
+      const z0 = Math.min(sourceSegments - 1, Math.floor(fz));
+      const tx = fx - x0;
+      const tz = fz - z0;
+      const row = sourceSegments + 1;
+
+      const h00 = source[z0 * row + x0];
+      const h10 = source[z0 * row + x0 + 1];
+      const h01 = source[(z0 + 1) * row + x0];
+      const h11 = source[(z0 + 1) * row + x0 + 1];
+
+      const top = h00 + (h10 - h00) * tx;
+      const bottom = h01 + (h11 - h01) * tx;
+      target[iz * (segments + 1) + ix] = top + (bottom - top) * tz;
+    }
+  }
+  return target;
 }
 
 /** Shortest distance from a point to a polyline in the XZ plane. */

@@ -32,6 +32,7 @@ import sys
 from . import (
     props,
     ops_track,
+    ops_preview,
     ops_collision,
     ops_vehicle,
     export_track,
@@ -39,7 +40,16 @@ from . import (
     ui,
 )
 
-_MODULES = (props, ops_track, ops_collision, ops_vehicle, export_track, export_vehicle, ui)
+_MODULES = (
+    props,
+    ops_track,
+    ops_preview,
+    ops_collision,
+    ops_vehicle,
+    export_track,
+    export_vehicle,
+    ui,
+)
 
 
 def register():

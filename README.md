@@ -178,6 +178,13 @@ prop, spawn, checkpoint, terrain feature — and export. Tools generate start
 grids, checkpoint runs, barrier walls and roadside scatter along the road.
 Scenery meshes go out as a `.glb` beside the JSON.
 
+You don't model the road or the ground: both are generated from the track file
+at load time. **Build Course Preview** builds them as meshes in Blender, using
+a Python port of the game's own generation code, so you author against the
+terrain you will actually drive on. If you'd rather sculpt the landscape by
+hand, switch Terrain Source to **Sculpted Mesh** and the exporter bakes your
+mesh into the heightfield.
+
 **Collision** is authored separately from what you see, and must be convex:
 the physics engine resolves boxes and convex hulls properly but not concave
 triangle meshes, which would silently let trucks through. The exporter checks
@@ -244,11 +251,14 @@ npm run typecheck                        # strict TypeScript
 python3 blender/tests/test_convert.py    # Blender <-> game coordinate conversion
 python3 blender/tests/test_collision.py  # collider convexity check
 python3 blender/tests/test_handling.py   # derived handling numbers
+python3 blender/tests/test_generate.py   # terrain and road generation
+python3 blender/tests/test_heightmap.py  # sculpted-terrain bake
 ```
 
-Both suites cover things whose failure mode is invisible: a wrong axis gives a
-silently mirrored track, and a concave collider exports and loads perfectly
-before letting trucks drive through walls at speed.
+These cover things whose failure mode is invisible: a wrong axis gives a
+silently mirrored track, a concave collider exports and loads perfectly before
+letting trucks drive through walls at speed, and a drifted generation port
+gives you a Blender preview of a course the game will never build.
 
 ## Steam
 

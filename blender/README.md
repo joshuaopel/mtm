@@ -22,7 +22,7 @@ without leaking into the track.
 | Role | Object type | Becomes |
 | --- | --- | --- |
 | Road Spline | Curve | The racing line, road surface and AI path |
-| Terrain Bounds | Any | Sets the terrain patch size |
+| Terrain | Any | Sets the terrain patch size; if it is a mesh and Terrain Source is *Sculpted*, it also becomes the ground |
 | Blocker Wall | Mesh | A solid collision box |
 | Prop | Empty or mesh | Scenery, optionally solid |
 | Spawn Point | Empty | A start-grid slot |
@@ -31,19 +31,89 @@ without leaking into the track.
 | Collider | Mesh | An invisible collision volume |
 | Scenery Mesh | Mesh | Visual geometry exported into the track's `.glb` |
 
-A typical session:
+### You do not model the terrain or the road
+
+This trips everyone up once, so it is worth stating plainly: **there is no road
+mesh and no terrain mesh in your .blend, and you are not supposed to make one.**
+
+The road you drive on is lofted along the spline by the game at load time, and
+the ground is generated from noise plus the features you place. A track file is
+a recipe, not geometry. So the authoring order is:
+
+1. Draw the **road curve**.
+2. Place **Terrain Feature** empties to shape the land around it.
+3. Press **Build Course Preview** to see the result.
+
+You do not "apply a spline over a terrain" — the road carves the terrain, not
+the other way round.
+
+### The course preview
+
+The **Course Preview** panel builds `MTM_Preview_Terrain` and
+`MTM_Preview_Road` as real meshes, using a Python port of the game's own
+generation code (`generate.py`, pinned to the TypeScript by
+`tests/test_generate.py`). What you see is the ground you will drive on, at the
+elevation you will drive it.
+
+- Preview meshes carry no role, so the exporter ignores them.
+- They are not selectable, so they never get in the way of the things you are
+  actually placing.
+- They do not update by themselves. Move the curve, change a feature, change
+  the seed — press **Build Course Preview** again.
+- **Preview Resolution** (in the operator's redo panel, bottom-left) only
+  affects what Blender has to draw. The exported track uses **Segments**.
+
+**Drop To Terrain** snaps the selected objects down onto that surface, which is
+the fastest way to get props and walls sitting on sloped ground.
+
+### Terrain source: generated or sculpted
+
+The **Terrain** box has a **Terrain Source** switch:
+
+- **Generated** (default) — noise plus features, built at load time. The
+  terrain object only needs to be an Empty; its bounds set the patch size.
+  Nothing to model, and the track file stays a couple of kilobytes.
+- **Sculpted Mesh** — give a *mesh* the Terrain role and sculpt it. At export
+  it is sampled onto the runtime's height grid by casting rays straight down,
+  and the result is written into the track JSON as a heightmap.
+
+Sculpted terrain is a heightfield, which has two consequences you need to know
+before you model: **overhangs, caves and vertical cliff faces cannot be
+represented** (each bakes to its topmost surface, and the truck drives over the
+top), and the file grows — 256 segments is about 340KB of base64. **Bake
+Resolution** trades detail against size; the game resamples to the track's own
+**Segments** either way.
+
+**Carve Road Into Terrain** stays on by default, so the road is still flattened
+into your sculpt. Two things follow from that, both worth knowing before you
+spend an evening modelling:
+
+- The carve blends from road level back to your ground over the **shoulder**
+  distance. If your sculpt is 15m above the road and the shoulder is 5m, that
+  is a 15m step in 5m — the road ends up at the bottom of a trench. Sculpt the
+  land to roughly follow the road's elevation, and give a sculpted track a
+  generous shoulder.
+- Turning the carve **off** means the ground under the road is whatever you
+  modelled, full stop. That only works if your sculpt already contains the road
+  bed at the spline's own elevation — otherwise the trucks spawn inside a hill
+  and start the race on their roofs. Build the preview, look at where the road
+  ribbon sits relative to your mesh, and sculpt to it.
+
+In sculpted mode the preview builds only the road ribbon — your mesh is already
+the ground, and generating a second one would bury it.
+
+### A typical session
 
 1. **New Track Scaffold** — creates an oval road curve, a terrain bounds box
-   and a sun lamp.
+   and a sun lamp, and builds the course preview.
 2. Edit `MTM_Road` in Edit Mode to shape the course. Only its shape matters;
    the game re-splines the exported points.
 3. Set **Road Width**, **Shoulder** and **Point Spacing** in the Road panel.
    The terrain is flattened under the road and blended back out across the
    shoulder, so a wide shoulder gives forgiving run-off.
-4. Shape the landscape by adding Empties tagged **Terrain Feature**. Terrain is
-   generated procedurally at runtime rather than baked from a mesh, so features
-   are how you sculpt it. A feature's radius comes from its X scale, so you
-   size it by scaling it in the viewport.
+4. Shape the landscape by adding Empties tagged **Terrain Feature**. A
+   feature's radius comes from its X scale, so you size it by scaling it in the
+   viewport. Rebuild the preview to see what you did.
 5. **Build Start Grid** and, if you want hand-placed gates, **Place
    Checkpoints**. Both are optional — without them the game generates a grid
    behind the line and gates around the road.
@@ -51,14 +121,25 @@ A typical session:
    walls at load time (cheap, and the file stays small), or press **Generate
    Barrier Walls** to bake them as real objects you can then edit. Baking turns
    auto-barriers off so the course is not fenced twice.
-7. **Scatter Props** to dress the roadside.
+7. **Scatter Props** to dress the roadside, then **Drop To Terrain** to settle
+   them onto the ground.
 8. Model any custom geometry, tag it **Scenery Mesh**, and give it collision
    (see below).
 9. **Validate Track**, then **Export Track**.
 
 Export writes the JSON to the path in the Export panel, and a matching `.glb`
-of the scenery beside it. Copy **both** into the game's `public/content/` and
-add the JSON to `manifest.json`.
+of the scenery beside it. Copy **both** into the game's `public/content/`.
+
+### If the preview will not build
+
+- *"No object has the 'Road Spline' role"* — nothing is tagged as the road.
+  Select your curve and use **Tag Selected → Road Spline**.
+- *"...is marked as the road but is not a curve"* — the role is on a mesh.
+  The road has to be a curve object.
+- *"Road resampled to fewer than 3 points"* — **Point Spacing** is larger than
+  your course. Lower it.
+- The preview appears but is flat — check **Amplitude** is not zero and that
+  your Terrain Feature empties are actually tagged.
 
 ## Collision
 
@@ -181,4 +262,12 @@ The coordinate conversion has unit tests that run without Blender:
 python3 blender/tests/test_convert.py    # coordinate conversion
 python3 blender/tests/test_collision.py  # collider convexity check
 python3 blender/tests/test_handling.py   # derived handling numbers
+python3 blender/tests/test_generate.py   # terrain and road generation
+python3 blender/tests/test_heightmap.py  # sculpted-terrain bake
 ```
+
+`test_generate.py` is the one that keeps the preview honest. It pins the noise
+and the road spline to reference values printed from the game's own code —
+`src/core/Noise.ts` and three.js's `CatmullRomCurve3` — so if a formula changes
+on one side and not the other, the tests say so instead of the preview quietly
+showing you a course the game will not build.

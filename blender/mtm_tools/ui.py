@@ -58,11 +58,43 @@ class MTM_PT_track_road(MTMPanel, Panel):
 
         box = layout.box()
         box.label(text="Terrain", icon="MESH_GRID")
+        box.prop(settings, "terrain_source", expand=True)
+
+        if settings.terrain_source == "procedural":
+            box.label(text="Generated at runtime — nothing to model.", icon="INFO")
+            box.label(text="Shape it with Terrain Feature empties.")
+            column = box.column(align=True)
+            column.prop(settings, "terrain_amplitude")
+            column.prop(settings, "terrain_frequency")
+            column.prop(settings, "terrain_seed")
+        else:
+            box.label(text="Give a mesh the Terrain role, then sculpt it.", icon="INFO")
+            box.label(text="Heightfield: no overhangs or caves.", icon="ERROR")
+            column = box.column(align=True)
+            column.prop(settings, "heightmap_segments")
+            column.prop(settings, "heightmap_flatten_road")
+
         box.prop(settings, "terrain_segments")
-        box.prop(settings, "terrain_amplitude")
-        box.prop(settings, "terrain_frequency")
-        box.prop(settings, "terrain_seed")
-        box.label(text="Size follows the terrain bounds object", icon="INFO")
+        box.label(text="Size follows the Terrain object's bounds", icon="INFO")
+
+
+class MTM_PT_track_preview(MTMPanel, Panel):
+    bl_label = "Course Preview"
+    bl_idname = "MTM_PT_track_preview"
+    bl_parent_id = "MTM_PT_track"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.label(text="Build the ground and road you will drive on", icon="INFO")
+        column = layout.column(align=True)
+        column.scale_y = 1.3
+        column.operator("mtm.build_preview", icon="MESH_GRID")
+        column.operator("mtm.clear_preview", icon="TRASH")
+
+        layout.separator()
+        layout.operator("mtm.drop_to_terrain", icon="TRIA_DOWN_BAR")
+        layout.label(text="Preview meshes are never exported", icon="CHECKMARK")
 
 
 class MTM_PT_track_environment(MTMPanel, Panel):
@@ -412,6 +444,7 @@ class MTM_PT_vehicle_export(MTMPanel, Panel):
 _CLASSES = (
     MTM_PT_track,
     MTM_PT_track_road,
+    MTM_PT_track_preview,
     MTM_PT_track_environment,
     MTM_PT_track_build,
     MTM_PT_track_collision,

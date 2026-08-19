@@ -39,6 +39,12 @@ class MTM_OT_new_track(Operator):
 
     radius: FloatProperty(name="Radius", default=220.0, min=40.0, subtype="DISTANCE")
     points: IntProperty(name="Corner Points", default=12, min=4, max=64)
+    preview: BoolProperty(
+        name="Build Course Preview",
+        default=True,
+        description="Generate the terrain and road meshes so you can see the "
+        "course while you edit it. They are display-only and never exported",
+    )
 
     def execute(self, context):
         scene = context.scene
@@ -90,6 +96,16 @@ class MTM_OT_new_track(Operator):
         road.select_set(True)
         context.view_layer.objects.active = road
 
+        if self.preview:
+            # The road curve alone tells you nothing about the ground under
+            # it, so the scaffold builds the preview once. Rebuild it from the
+            # Course Preview panel after you move the curve.
+            # The preview tessellates the curve through the depsgraph, which
+            # has not seen the object we just linked until the view layer
+            # catches up.
+            context.view_layer.update()
+            bpy.ops.mtm.build_preview()
+
         self.report({"INFO"}, "Created a starter track. Edit MTM_Road to shape the course.")
         return {"FINISHED"}
 
@@ -105,7 +121,7 @@ class MTM_OT_tag_objects(Operator):
         name="Role",
         items=[
             ("ROAD", "Road Spline", ""),
-            ("TERRAIN", "Terrain Bounds", ""),
+            ("TERRAIN", "Terrain", ""),
             ("WALL", "Blocker Wall", ""),
             ("PROP", "Prop", ""),
             ("SPAWN", "Spawn Point", ""),
@@ -419,7 +435,7 @@ class MTM_OT_select_role(Operator):
         name="Role",
         items=[
             ("ROAD", "Road Spline", ""),
-            ("TERRAIN", "Terrain Bounds", ""),
+            ("TERRAIN", "Terrain", ""),
             ("WALL", "Blocker Wall", ""),
             ("PROP", "Prop", ""),
             ("SPAWN", "Spawn Point", ""),

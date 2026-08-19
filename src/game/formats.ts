@@ -103,6 +103,30 @@ export interface TrackTerrain {
   frequency: number;
   seed: number;
   features: TerrainFeature[];
+  /**
+   * Baked heights from a sculpted mesh, replacing the procedural generation.
+   *
+   * The physics ground is a heightfield, so this is a grid of heights rather
+   * than an arbitrary mesh — overhangs and caves cannot be represented, and
+   * anything modelled as one bakes to its topmost surface.
+   */
+  heightmap?: TerrainHeightmap;
+}
+
+export interface TerrainHeightmap {
+  /** Grid resolution; `data` decodes to (segments + 1)^2 floats. */
+  segments: number;
+  /**
+   * Base64-encoded little-endian Float32 array, row-major and indexed as
+   * `iz * (segments + 1) + ix`, matching the runtime's own layout.
+   */
+  data: string;
+  /**
+   * Carve the road into the baked surface, as the procedural path does.
+   * On by default: without it a road crossing sculpted ground is left either
+   * buried or floating. Turn it off only if you sculpted the road yourself.
+   */
+  flattenRoad?: boolean;
 }
 
 /** Solid axis-relative box. Chassis and props collide with these. */

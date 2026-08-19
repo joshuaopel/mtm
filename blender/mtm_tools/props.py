@@ -26,7 +26,14 @@ from bpy.types import Object, PropertyGroup, Scene
 OBJECT_ROLES = [
     ("NONE", "None", "Ignored by the exporter", "BLANK1", 0),
     ("ROAD", "Road Spline", "Curve defining the racing line", "CURVE_BEZCURVE", 1),
-    ("TERRAIN", "Terrain", "Mesh baked into the heightfield", "MESH_GRID", 2),
+    (
+        "TERRAIN",
+        "Terrain",
+        "Sets the terrain patch size; becomes the ground itself when Terrain "
+        "Source is Sculpted Mesh",
+        "MESH_GRID",
+        2,
+    ),
     ("WALL", "Blocker Wall", "Solid box the trucks collide with", "MESH_CUBE", 3),
     ("PROP", "Prop", "Scenery, optionally solid", "MESH_MONKEY", 4),
     ("SPAWN", "Spawn Point", "A grid slot", "EMPTY_ARROWS", 5),
@@ -204,6 +211,39 @@ class MTMTrackProps(PropertyGroup):
     )
 
     # Terrain
+    terrain_source: EnumProperty(
+        name="Terrain Source",
+        items=[
+            (
+                "procedural",
+                "Generated",
+                "Built at runtime from noise plus the terrain features you place. "
+                "Nothing to model; use the course preview to see it",
+            ),
+            (
+                "sculpted",
+                "Sculpted Mesh",
+                "Bake the Terrain-role mesh into a heightfield at export. Model the "
+                "landscape however you like — but it is a heightfield, so overhangs "
+                "and caves cannot be represented",
+            ),
+        ],
+        default="procedural",
+    )
+    heightmap_segments: IntProperty(
+        name="Bake Resolution",
+        default=128,
+        min=32,
+        max=256,
+        description="Grid resolution of the baked heightfield. Higher captures "
+        "finer sculpting at the cost of a much larger track file",
+    )
+    heightmap_flatten_road: BoolProperty(
+        name="Carve Road Into Terrain",
+        default=True,
+        description="Flatten the sculpted ground under the road, as the generated "
+        "terrain does. Turn this off only if you sculpted the road surface yourself",
+    )
     terrain_size: FloatProperty(name="Size", default=800.0, min=100.0, subtype="DISTANCE")
     terrain_segments: IntProperty(
         name="Segments",
