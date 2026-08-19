@@ -226,6 +226,13 @@ export class RetroRenderer {
     this.mirrorFrame.frustumCulled = false;
     this.mirrorFrame.renderOrder = 1;
 
+    // Start hidden, matching `mirrorVisible`. `render` only touches these when
+    // the flag changes, so a mesh left at three's default of visible=true would
+    // sit there showing an uninitialised black target until the first race
+    // turned the mirror on — which is to say, over the title screen.
+    this.mirrorQuad.visible = false;
+    this.mirrorFrame.visible = false;
+
     this.blitScene.add(this.mirrorFrame);
     this.blitScene.add(this.mirrorQuad);
     this.layoutMirror();
