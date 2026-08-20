@@ -19,7 +19,7 @@ packaging step rather than a port.
 | `npm run desktop` | Runs it locally, fullscreen, for a quick look |
 | `npm run desktop:windowed` | Same, in a window |
 | `npm run desktop:pack` | `release/linux-unpacked/` |
-| `npm run desktop:dist` | Adds `release/mtm-<version>.tar.gz` |
+| `npm run desktop:dist` | Adds `release/monster-truck-mania-<version>-x64.tar.gz` |
 | `npx electron-builder --win dir` | `release/win-unpacked/` for desktop Steam |
 
 The Linux folder is about 310MB, most of which is Chromium. That is the price
@@ -53,16 +53,111 @@ tools: export a track on your PC, copy two files into `content/`, restart.
 
 ## Putting it on a Deck
 
-1. `npm run desktop:pack` on your PC
-2. Copy `release/linux-unpacked/` to the Deck — USB stick, `scp`, Warpinator,
-   whatever. Put it somewhere like `~/Games/MonsterTruckMania`
-3. In Desktop Mode, make it executable if the copy did not preserve that:
-   `chmod +x ~/Games/MonsterTruckMania/monster-truck-mania`
-4. **Steam → Games → Add a Non-Steam Game**, **Browse**, filter to **All
-   Files**, pick `monster-truck-mania`
-5. Set the controller layout — see below
+No terminal needed. The whole thing is done with a file manager and the Steam
+UI.
 
-No browser to install, no launcher script, no local server.
+### Step 1 — build the tarball on your PC
+
+```bash
+npm run desktop:dist
+```
+
+You want the **`.tar.gz`**, not the folder:
+
+```
+release/monster-truck-mania-0.1.0-x64.tar.gz     ← this one, about 116MB
+```
+
+Use the tarball rather than copying the folder, and it is not just for
+convenience. A `.tar.gz` carries Unix file permissions inside it. **A USB
+stick formatted FAT32 or exFAT — which is how most of them come — cannot store
+the "this file is a program" flag**, so copying the loose folder across
+strips it and the Deck then refuses to run the game with no useful
+explanation. Inside a tarball the flag survives, because it is data in the
+archive rather than a property of the stick.
+
+(Tested both ways: extracted from the tarball the executable keeps `-rwxr-xr-x`
+and launches; copied without permissions it comes out `-rw-r--r--` and needs a
+`chmod +x` before it will start.)
+
+### Step 2 — get to Desktop Mode
+
+**Steam button → Power → Switch to Desktop.** The Deck reboots into a normal
+KDE desktop.
+
+Two things worth knowing before you start:
+
+- The **on-screen keyboard is Steam button + X**. Non-obvious, and painful
+  without it.
+- The blue folder in the taskbar is **Dolphin**, the file manager. "Home" in
+  its sidebar is `/home/deck` — that is your user folder, the equivalent of
+  `C:\Users\you`.
+
+### Step 3 — get the file across
+
+Pick whichever suits you. All three end the same way.
+
+**Cloud drive — easiest, no cables.** Upload the `.tar.gz` to Google Drive,
+Dropbox or WeTransfer from your PC. On the Deck, open the browser in Desktop
+Mode, sign in, download it. It lands in `/home/deck/Downloads`.
+
+**USB stick or microSD.** Copy the `.tar.gz` on, plug it into the Deck, and it
+appears in Dolphin's sidebar under Devices. Drag it to Home.
+
+**Over your network.** Install **Warpinator** from the Discover store on the
+Deck and run its counterpart on your PC; it is drag-and-drop between machines
+on the same wifi. More setup the first time, least friction after that.
+
+If you would rather use a terminal after all, from your PC:
+
+```bash
+scp release/monster-truck-mania-0.1.0-x64.tar.gz deck@<deck-ip>:/home/deck/
+```
+
+The Deck's IP is in **Settings → Internet**, and this needs SSH enabled on the
+Deck, which is off by default — which is exactly why the three GUI options are
+listed first.
+
+### Step 4 — unpack it
+
+In Dolphin, find the `.tar.gz` (it will be in **Home** or **Downloads**),
+**right-click → Extract → Extract archive here**.
+
+You get a folder called `monster-truck-mania-0.1.0-x64`. Inside it, among the
+Chromium files, are the two things that matter:
+
+```
+monster-truck-mania      ← the game itself
+content/                 ← drop your own tracks and trucks in here
+```
+
+Drag that folder somewhere sensible — Home is fine. Its full path will be
+`/home/deck/monster-truck-mania-0.1.0-x64`, and you will need that path in a
+moment.
+
+### Step 5 — add it to Steam
+
+Still in Desktop Mode, in the Steam app:
+
+1. **Games → Add a Non-Steam Game to My Library**
+2. **Browse**
+3. **Change the file type filter at the bottom of the dialog to "All Files".**
+   The game has no file extension, so with the default filter it is invisible
+   and the folder looks empty. This trips up nearly everyone.
+4. Navigate to your folder and pick **`monster-truck-mania`** — the file with
+   no dot in its name, not `chrome-sandbox` or anything ending in `.so`
+5. **Add Selected Programs**
+
+Then right-click it in the library → **Properties** and rename it to something
+you would like to see on the shelf.
+
+### Step 6 — back to Gaming Mode, and the one setting that matters
+
+Double-click **Return to Gaming Mode** on the desktop.
+
+Your game is now in **Library → Non-Steam**. Before you launch it, set the
+controller layout — see immediately below. Skip that and the sticks and
+triggers will do nothing.
 
 ### The controller layout is the step that matters
 
@@ -165,9 +260,11 @@ script is a smaller thing to get wrong when you are only testing.
 | --- | --- |
 | Sticks and triggers dead, buttons work | Controller layout is still Desktop. See above. |
 | Nothing responds at all | Chromium only exposes a gamepad after its first button press. Press A once more. |
-| Black window | The `content` folder or `resources` folder did not come across. Copy the whole unpacked folder, not just the executable. |
-| Refuses to start, no window, no message | Try launching from a terminal to see stderr. If it mentions the sandbox, add `--no-sandbox` to the Steam launch options: `%command% --no-sandbox`. |
-| Your own track does not appear | It goes in `content/` **beside the executable**, not inside `resources`. Restart the game; the index is rebuilt at launch. |
+| Black window | The `content` or `resources` folder did not come across. Copy the whole extracted folder, not just the executable. |
+| "Permission denied", or it does nothing at all | The executable flag was stripped, almost certainly by a FAT32/exFAT USB stick. Either re-do it with the `.tar.gz`, or in Dolphin: right-click the `monster-truck-mania` file → Properties → Permissions → tick **Is executable**. |
+| The folder looks empty in Steam's Browse dialog | The file type filter is still on its default. Change it to **All Files**. |
+| Refuses to start, no window, no message | Launch it from Konsole (`cd` into the folder, then `./monster-truck-mania`) to see the error. If it mentions the sandbox, add `--no-sandbox` to the Steam launch options: `%command% --no-sandbox`. |
+| Your own track does not appear | It goes in the `content/` folder **beside the executable**, not inside `resources`. Restart the game; the index is rebuilt at launch. |
 | Sound silent until you touch something | Browsers block audio until the page is interacted with. The first button press releases it. |
 
 ---

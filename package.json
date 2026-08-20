@@ -66,7 +66,8 @@
         }
       ],
       "category": "Game",
-      "executableName": "monster-truck-mania"
+      "executableName": "monster-truck-mania",
+      "artifactName": "monster-truck-mania-${version}-${arch}.${ext}"
     },
     "win": {
       "target": [
@@ -76,7 +77,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "monster-truck-mania-${version}-windows-${arch}.${ext}"
     },
     "extraFiles": [
       {
