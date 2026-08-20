@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "desktop": "npm run build && electron electron/main.cjs",
+    "desktop:windowed": "npm run build && electron electron/main.cjs --windowed",
+    "desktop:pack": "npm run build && electron-builder --linux dir",
+    "desktop:dist": "npm run build && electron-builder --linux"
   },
   "repository": {
     "type": "git",
@@ -24,7 +28,61 @@
   },
   "devDependencies": {
     "@types/three": "^0.185.4",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.1"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.joshuaopel.monstertruckmania",
+    "productName": "Monster Truck Mania",
+    "copyright": "",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/resources"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json",
+      "!node_modules/**/*",
+      "!dist/content/**/*"
+    ],
+    "extraResources": [],
+    "linux": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Game",
+      "executableName": "monster-truck-mania"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "extraFiles": [
+      {
+        "from": "dist/content",
+        "to": "content"
+      }
+    ]
   }
 }

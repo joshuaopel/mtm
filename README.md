@@ -381,24 +381,33 @@ Framing is tunable from the query string —
 `?bearing=2&dist=15&height=1.2&fov=56&aim=3` are the defaults. Screenshot the
 page at 1600x760 (at 2x device scale for a crisp one) and you have the poster.
 
-## Steam Deck
+## Desktop, Steam and the Steam Deck
 
-It runs on a Deck today, without packaging it into an executable:
-`npm run build`, copy `dist/` and `deck/monster-truck-mania.sh` across, add the
-script to Steam as a non-Steam game. [`docs/steam-deck.md`](docs/steam-deck.md)
-is the full walkthrough.
+```bash
+npm run desktop          # run it as a desktop app
+npm run desktop:pack     # release/linux-unpacked/ — a runnable folder
+npm run desktop:dist     # the above, plus a .tar.gz
+```
 
-The one step that is easy to miss: set the game's controller layout to
-**Gamepad** rather than the desktop default, or Steam Input feeds the browser
-keyboard and mouse events and the Gamepad API sees no pad at all. Buttons will
-still work through the menus, which makes it look like the sticks are broken.
+One build covers all three. A Steam Deck is an x86-64 Linux PC, so the Linux
+folder you would upload as a Steam depot is the one that runs on the Deck —
+there is no separate Deck build. `npx electron-builder --win dir` cross-builds
+the Windows folder for desktop Steam.
 
-The launcher serves the build on localhost rather than opening it from disk,
-because the game fetches its content files at startup and `fetch()` is blocked
-on `file://`. It uses the Python that SteamOS already ships and shuts down with
-the browser.
+[`docs/steam-deck.md`](docs/steam-deck.md) is the walkthrough, including the
+step that is easy to miss: set the game's controller layout to **Gamepad**
+rather than Steam's desktop default, or the Gamepad API sees no pad at all and
+it looks like the sticks are broken while the buttons still work.
 
-Longer term, wrapping the same build in Electron or Tauri gives a binary with
-no browser dependency. The renderer, input and audio are already isolated
-behind small interfaces and there is no server dependency, so that is a
-packaging job rather than a port.
+The shell in `electron/` is small but not trivial, because two things need
+solving. The game fetches its content at startup and `fetch()` is blocked on
+`file://`, so the app is served over a custom `mtm://` scheme registered as
+standard and secure — a real origin, no socket. And burying `content/` inside
+the app archive would kill the drop-in workflow the rest of the project is
+built on, so content ships as a folder beside the executable and the index is
+rebuilt by listing it, which means a track copied in after the build is still
+found.
+
+`deck/monster-truck-mania.sh` is the older no-packaging route — serve `dist/`
+on localhost, open a kiosk browser. Still there, still works, but the packaged
+build is what you would ship.
