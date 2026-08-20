@@ -524,6 +524,21 @@ export interface VehicleModel {
   bodyNode?: string;
   /** Node holding a single wheel, modelled at the origin. Defaults to "MTM_Wheel". */
   wheelNode?: string;
+  /**
+   * Four wheel nodes instead of one, in the order front-left, front-right,
+   * rear-left, rear-right — the same order the physics rig uses.
+   *
+   * Use this when the corners are not interchangeable: different front and
+   * rear tyres, or lettering that has to face outwards on both sides without
+   * the mirroring that would reverse it. Each node's own translation is
+   * ignored, because the physics decides where wheels go; only its geometry
+   * and rotation are kept.
+   *
+   * When absent the loader looks for `<wheelNode>_FL`/`_FR`/`_RL`/`_RR` and
+   * uses them if all four are present, so a model exported per-corner works
+   * without anything in the JSON.
+   */
+  wheelNodes?: [string, string, string, string];
   /** Uniform scale applied to the imported meshes. */
   scale?: number;
   /** Extra yaw in degrees, for a body modelled facing the wrong way. */

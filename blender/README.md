@@ -330,25 +330,65 @@ dithered dirt, and the renderer quantises to 16 levels per channel anyway.
 
 ### Modelling your own body
 
-The rig creates two slots: `MTM_Body` and `MTM_Wheel`. Either rename your
-meshes to match, or parent whole assemblies under the empties of those names.
+**Build Reference Rig** creates the slots you hang meshes on. Either rename
+your meshes to match, or parent whole assemblies under the empties of those
+names.
+
+| Slot | Holds |
+| --- | --- |
+| `MTM_Body` | The body. Its position also sets ride height — see below |
+| `MTM_Wheel_FL` | Front left |
+| `MTM_Wheel_FR` | Front right |
+| `MTM_Wheel_RL` | Rear left |
+| `MTM_Wheel_RR` | Rear right |
+
+Front/rear and left/right are from the driver's seat, and the game uses the
+same order internally, so `_FL` really is the wheel at −X and +Y. Every corner
+gets its own geometry, which is how you get directional tread facing the right
+way on both sides, or a bigger tyre on the back.
+
+A single `MTM_Wheel` still works: model it once at the world origin and the
+game clones it four times. Use that for a symmetric truck — it is less to
+build and half the file size. The exporter picks whichever layout it finds,
+preferring the four corners when all of them exist.
+
+### Placing the axles by dragging
+
+The corner slots are the axle positions. Drag them where you want the wheels
+and the numbers follow — **Read Axles From Wheels** updates the panel, and
+**Export Vehicle** does it for you anyway, so the scene always wins over
+stale fields. Track is averaged across each axle, since the physics has one
+half-track per axle and cannot represent a truck with one wheel further out
+than the other.
+
+Height is the one that trips people up, and it is worth understanding rather
+than fighting:
+
+- **Dragging a wheel up or down does nothing.** A resting wheel always sits at
+  exactly one wheel radius above the ground — that is what "resting" means —
+  no matter what the suspension is doing. Wheel height carries no information.
+- **Ride height is set by the body.** Move `MTM_Body` up and the truck stands
+  taller. The exporter converts that into `axleHeight`, which is the *top of
+  the suspension strut* measured down from the centre of mass — not the wheel
+  centre, which hangs below it by the resting spring length.
+
+So: drag the wheels for the footprint, drag the body for the stance.
 
 - **The body must be built around the centre of mass** — the red axes marker,
   not the ground. That origin is what the runtime positions the truck by, so
   a body modelled sitting on the floor will end up buried.
-- **The wheel must be modelled at the world origin**, and only once. The game
-  places all four copies itself from the physics rig; any offset you build in
-  is applied on top of that.
 - Check the body clears the wheels through their whole stroke — the blue
   droop and bump rings show the extremes.
 
 **Fit Body To Chassis** scales and centres a body to the chassis box, fitting
 to the tightest axis so proportions survive. **Check Model Alignment** reports
-a body sitting above or below the centre of mass, a wheel modelled off-origin,
-and a wheel whose radius disagrees with the physics.
+a body sitting above or below the centre of mass, a wheel that has drifted
+from its axle, and a wheel whose radius disagrees with the physics.
 
 Then **Export Model (.glb)**, which also fills in the **Model** path, and
-**Export Vehicle** to write the JSON. Copy both into `public/content/`.
+**Export Vehicle** to write the JSON. Copy both into `public/content/` and the
+game picks them up without a restart — no manifest to edit, so the loop is
+drag, export, alt-tab, drive.
 
 Leave the **Model** path blank to go back to the procedural body.
 

@@ -266,9 +266,18 @@ colour updates every vehicle ever exported.
 
 **Vehicles.** The reference rig draws what the simulation believes — chassis
 box, wheel positions through their full travel, ground plane, centre of mass —
-so you can model against it. Supply a body and one wheel; the game instances
-the wheel four times and places them from the physics rig. Or skip modelling
-entirely and use the procedural body.
+so you can model against it. Fill the named slots: `MTM_Body` plus either one
+`MTM_Wheel` the game clones four times, or `MTM_Wheel_FL`/`_FR`/`_RL`/`_RR`
+when the corners differ. Or skip modelling entirely and use the procedural
+body.
+
+The corner slots are also how you place the axles: drag them, and the export
+reads the numbers off them. Height works differently from what you would
+expect and it is worth knowing why — a resting wheel is always exactly one
+wheel radius above the ground, whatever the suspension is set to, so moving a
+wheel vertically tells you nothing. Stance comes from the body: `axleHeight`
+is the top of the suspension strut measured from the centre of mass, and the
+exporter derives it from where you put `MTM_Body`.
 
 For where the tooling is going, see [`docs/engine-tools.md`](docs/engine-tools.md).
 

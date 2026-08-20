@@ -15,9 +15,49 @@ import bpy
 from bpy.types import Operator
 
 from .convert import to_hex
+from .vehicle_rig import (
+    BODY_NAME,
+    axle_height_from_body_z,
+    axles_from_wheels,
+    read_wheel_slots,
+    wheel_slot_names,
+)
 
 FORMAT = "mtm-vehicle"
 VERSION = 1
+
+
+def sync_axles_from_scene(scene):
+    """
+    Let the objects in the scene win over the numbers in the panel.
+
+    If the four `MTM_Wheel_*` slots exist, their positions are what the
+    author actually looked at while modelling, so they are the truth and the
+    panel fields are a readout. Same for the body's height, which is the one
+    thing that pins down `axleHeight`.
+
+    Returns the fields it changed, so the exporter can say so rather than
+    silently rewriting the panel.
+    """
+    settings = scene.mtm_vehicle
+    wheels = read_wheel_slots()
+    if not wheels:
+        return {}
+
+    changed = {}
+    for key, value in axles_from_wheels(wheels).items():
+        if abs(getattr(settings, key) - value) > 1e-4:
+            setattr(settings, key, value)
+            changed[key] = value
+
+    body = bpy.data.objects.get(BODY_NAME)
+    if body is not None:
+        wanted = round(axle_height_from_body_z(settings, body.matrix_world.translation.z), 3)
+        if abs(settings.axle_height - wanted) > 1e-4:
+            settings.axle_height = wanted
+            changed["axle_height"] = wanted
+
+    return changed
 
 
 def build_vehicle(scene):
@@ -82,14 +122,22 @@ def build_vehicle(scene):
     # Only reference a model when one has been exported. Without this the
     # game falls back to the procedural body, which is the sane default.
     if settings.model_path.strip():
-        vehicle["model"] = {
+        model = {
             "url": settings.model_path.strip(),
-            "bodyNode": "MTM_Body",
+            "bodyNode": BODY_NAME,
             "wheelNode": "MTM_Wheel",
             "scale": round(settings.model_scale, 4),
             "yawOffset": round(settings.model_yaw, 3),
             "mirrorLeftWheels": bool(settings.mirror_left_wheels),
         }
+        # Naming the corners explicitly means the runtime does not have to
+        # guess from suffixes, and a renamed slot still binds.
+        if read_wheel_slots():
+            model["wheelNodes"] = wheel_slot_names()
+            # Each corner was modelled facing the way it should face, so
+            # mirroring would undo the author's work.
+            model["mirrorLeftWheels"] = False
+        vehicle["model"] = model
 
     return vehicle
 
@@ -136,7 +184,16 @@ class MTM_OT_export_vehicle(Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
+        bpy.context.view_layer.update()
+        changed = sync_axles_from_scene(context.scene)
         vehicle = build_vehicle(context.scene)
+
+        if changed:
+            self.report(
+                {"INFO"},
+                "Axle numbers taken from the wheel slots: "
+                + ", ".join(f"{k}={v}" for k, v in sorted(changed.items())),
+            )
 
         for problem in check_vehicle(vehicle):
             self.report({"WARNING"}, problem)
@@ -165,6 +222,8 @@ class MTM_OT_validate_vehicle(Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
+        bpy.context.view_layer.update()
+        sync_axles_from_scene(context.scene)
         problems = check_vehicle(build_vehicle(context.scene))
         if problems:
             for problem in problems:

@@ -513,7 +513,10 @@ class MTM_PT_vehicle_model(MTMPanel, Panel):
         row = box.row(align=True)
         row.operator("mtm.measure_vehicle_rig", icon="DRIVER_DISTANCE")
         row.operator("mtm.clear_vehicle_rig", icon="TRASH")
-        box.label(text="Model against MTM_Body and MTM_Wheel", icon="INFO")
+        column = box.column(align=True)
+        column.label(text="Drag MTM_Wheel_FL / _FR / _RL / _RR", icon="INFO")
+        column.label(text="to place the axles. Body height sets")
+        column.label(text="ride height. Export reads both back.")
 
         box = layout.box()
         box.label(text="Your Model", icon="MESH_MONKEY")

@@ -533,5 +533,138 @@ class TestPreview(BlenderCase):
         self.assertIsNone(bpy.data.collections.get("MTM_Preview"))
 
 
+class TestWheelSlots(BlenderCase):
+    """
+    The per-corner wheel slots are the placement UI: you drag them, and the
+    axle numbers follow. These cover the direction of that flow, since a
+    wrong sign here silently mirrors or inverts a truck.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.vehicle = bpy.context.scene.mtm_vehicle
+        bpy.ops.mtm.build_vehicle_rig()
+        bpy.context.view_layer.update()
+
+    def slots(self):
+        from mtm_tools.vehicle_rig import wheel_slot_name
+
+        return {c: bpy.data.objects[wheel_slot_name(c)] for c in ("FL", "FR", "RL", "RR")}
+
+    def test_the_rig_creates_four_draggable_corner_slots(self):
+        for corner, obj in self.slots().items():
+            self.assertFalse(
+                obj.hide_select,
+                f"{obj.name} must be selectable — the whole point is dragging it",
+            )
+
+    def test_slots_start_where_the_physics_puts_the_wheels(self):
+        from mtm_tools.vehicle_rig import wheel_rest_z
+
+        slots = self.slots()
+        self.assertAlmostEqual(slots["FL"].location.x, -self.vehicle.front_track, places=4)
+        self.assertAlmostEqual(slots["FR"].location.x, self.vehicle.front_track, places=4)
+        self.assertAlmostEqual(slots["FL"].location.y, self.vehicle.front_z, places=4)
+        self.assertAlmostEqual(slots["RL"].location.y, self.vehicle.rear_z, places=4)
+        for obj in slots.values():
+            self.assertAlmostEqual(obj.location.z, wheel_rest_z(self.vehicle), places=4)
+
+    def test_dragging_the_wheels_moves_the_axles(self):
+        slots = self.slots()
+        slots["FL"].location = (-1.6, 2.2, 0.92)
+        slots["FR"].location = (1.6, 2.2, 0.92)
+        slots["RL"].location = (-1.5, -2.0, 0.92)
+        slots["RR"].location = (1.5, -2.0, 0.92)
+        bpy.context.view_layer.update()
+
+        bpy.ops.mtm.measure_vehicle_rig()
+
+        self.assertAlmostEqual(self.vehicle.front_track, 1.6, places=3)
+        self.assertAlmostEqual(self.vehicle.front_z, 2.2, places=3)
+        self.assertAlmostEqual(self.vehicle.rear_track, 1.5, places=3)
+        self.assertAlmostEqual(self.vehicle.rear_z, -2.0, places=3)
+
+    def test_an_asymmetric_drag_averages_rather_than_picking_a_side(self):
+        slots = self.slots()
+        slots["FL"].location.x = -1.5
+        slots["FR"].location.x = 1.7
+        bpy.context.view_layer.update()
+        bpy.ops.mtm.measure_vehicle_rig()
+        self.assertAlmostEqual(self.vehicle.front_track, 1.6, places=3)
+
+    def test_wheel_height_does_not_set_axle_height(self):
+        """
+        A resting wheel sits at its own radius whatever `axleHeight` is, so
+        lifting one must not be mistaken for raising the truck. Ride height
+        comes from the body.
+        """
+        before = self.vehicle.axle_height
+        for obj in self.slots().values():
+            obj.location.z += 0.4
+        bpy.context.view_layer.update()
+        bpy.ops.mtm.measure_vehicle_rig()
+        self.assertAlmostEqual(self.vehicle.axle_height, before, places=4)
+
+    def test_raising_the_body_lowers_the_axle_height(self):
+        """They move in opposite directions — see `axle_height_from_body_z`."""
+        from mtm_tools.vehicle_rig import BODY_NAME, ride_height
+
+        body = bpy.data.objects[BODY_NAME]
+        before = self.vehicle.axle_height
+        body.location.z = ride_height(self.vehicle) + 0.3
+        bpy.context.view_layer.update()
+
+        bpy.ops.mtm.measure_vehicle_rig()
+
+        self.assertAlmostEqual(self.vehicle.axle_height, before - 0.3, places=3)
+        # And the round trip holds: the body is where we put it.
+        self.assertAlmostEqual(ride_height(self.vehicle), body.location.z, places=3)
+
+    def test_export_takes_the_axles_from_the_slots_without_pressing_read_back(self):
+        import json
+        import tempfile
+
+        slots = self.slots()
+        for corner in ("FL", "FR"):
+            slots[corner].location.y = 2.4
+        bpy.context.view_layer.update()
+
+        path = os.path.join(tempfile.mkdtemp(), "v.mtmvehicle.json")
+        self.vehicle.export_path = path
+        self.assertEqual(bpy.ops.mtm.export_vehicle(), {"FINISHED"})
+        with open(path) as handle:
+            vehicle = json.load(handle)
+
+        self.assertAlmostEqual(vehicle["physics"]["frontAxle"][1], 2.4, places=3)
+
+    def test_a_model_export_names_all_four_corners(self):
+        import json
+        import tempfile
+
+        from mtm_tools.vehicle_rig import wheel_slot_names
+
+        self.vehicle.model_path = "content/x.glb"
+        path = os.path.join(tempfile.mkdtemp(), "v.mtmvehicle.json")
+        self.vehicle.export_path = path
+        bpy.ops.mtm.export_vehicle()
+        with open(path) as handle:
+            vehicle = json.load(handle)
+
+        self.assertEqual(vehicle["model"]["wheelNodes"], wheel_slot_names())
+        self.assertFalse(
+            vehicle["model"]["mirrorLeftWheels"],
+            "corners were modelled individually; mirroring would undo that",
+        )
+
+    def test_a_partial_set_of_slots_is_ignored(self):
+        """Guessing an axle from two corners would write nonsense."""
+        from mtm_tools.export_vehicle import sync_axles_from_scene
+
+        bpy.data.objects.remove(self.slots()["RR"], do_unlink=True)
+        self.vehicle.front_z = 9.9
+        self.assertEqual(sync_axles_from_scene(bpy.context.scene), {})
+        self.assertAlmostEqual(self.vehicle.front_z, 9.9, places=4)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

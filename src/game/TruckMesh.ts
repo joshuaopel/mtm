@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { treadTexture } from '../core/Textures';
-import { extractNode } from '../core/Assets';
+import { extractNode, findNode } from '../core/Assets';
 import type { MTMVehicle, VehicleLook } from './formats';
 
 /**
@@ -527,12 +527,55 @@ export interface TruckMesh {
 }
 
 /**
+ * Wheel order, everywhere: front-left, front-right, rear-left, rear-right.
+ *
+ * This is the order `Vehicle.ts` adds wheels to the cannon rig, so index 0
+ * and 2 are always the left-hand pair. The Blender slots use the same
+ * suffixes, which is what lets a per-corner model bind without any mapping.
+ */
+export const WHEEL_CORNERS = ['FL', 'FR', 'RL', 'RR'] as const;
+
+/**
+ * Resolve the four wheel nodes.
+ *
+ * Three ways to name them, tried in order: an explicit `wheelNodes` list, a
+ * `_FL`/`_FR`/`_RL`/`_RR` suffix set (so a per-corner export just works), or
+ * a single node cloned four times. Probing with `findNode` before extracting
+ * matters — `extractNode` detaches, so a half-finished attempt would strip
+ * nodes out of the model before falling back.
+ */
+function resolveWheelNodes(
+  model: THREE.Group,
+  wheelName: string,
+  explicit: readonly string[] | undefined,
+): { nodes: THREE.Object3D[]; perCorner: boolean } | null {
+  const named = explicit ?? WHEEL_CORNERS.map((corner) => `${wheelName}_${corner}`);
+  if (named.length === 4 && named.every((name) => findNode(model, name))) {
+    return { nodes: named.map((name) => extractNode(model, name)!), perCorner: true };
+  }
+
+  // An explicit list that does not resolve is an authoring mistake worth
+  // saying out loud, rather than silently falling back to one wheel.
+  if (explicit) {
+    const missing = explicit.filter((name) => !findNode(model, name));
+    if (missing.length) console.warn(`[vehicle] wheelNodes not found: ${missing.join(', ')}`);
+  }
+
+  const single = extractNode(model, wheelName);
+  if (!single) return null;
+  return {
+    nodes: [single, single.clone(true), single.clone(true), single.clone(true)],
+    perCorner: false,
+  };
+}
+
+/**
  * Assemble a truck's visuals from a modelled glTF instead of primitives.
  *
- * The file supplies one body and one wheel; the wheel is cloned four times
- * and driven by the physics rig. Returns null if the expected nodes are
- * missing, so the caller can fall back to the procedural build rather than
- * putting an invisible truck on the grid.
+ * The file supplies a body and either one wheel (cloned four times) or four
+ * named corners. Either way the physics rig places them. Returns null if the
+ * expected nodes are missing, so the caller can fall back to the procedural
+ * build rather than putting an invisible truck on the grid.
  */
 export function buildTruckMeshFromModel(
   vehicle: MTMVehicle,
@@ -545,10 +588,10 @@ export function buildTruckMeshFromModel(
   const wheelName = spec.wheelNode ?? 'MTM_Wheel';
 
   const bodyNode = extractNode(model, bodyName);
-  const wheelNode = extractNode(model, wheelName);
+  const resolved = resolveWheelNodes(model, wheelName, spec.wheelNodes);
 
-  if (!bodyNode || !wheelNode) {
-    const missing = [!bodyNode && bodyName, !wheelNode && wheelName].filter(Boolean).join(' and ');
+  if (!bodyNode || !resolved) {
+    const missing = [!bodyNode && bodyName, !resolved && wheelName].filter(Boolean).join(' and ');
     console.warn(
       `[vehicle] "${vehicle.id}" model is missing node ${missing}; using the procedural truck instead`,
     );
@@ -569,13 +612,19 @@ export function buildTruckMeshFromModel(
   const wheels: THREE.Group[] = [];
   for (let i = 0; i < 4; i++) {
     const wheel = new THREE.Group();
-    const instance = i === 0 ? wheelNode : wheelNode.clone(true);
+    const instance = resolved.nodes[i];
+    // The physics owns wheel placement, so whatever offset the node carries
+    // — which for a per-corner model is the corner it was modelled at — has
+    // to go, or it lands on top of the position the rig computed. Rotation
+    // is kept, for a wheel modelled on its side.
+    instance.position.set(0, 0, 0);
     wheel.add(instance);
     wheel.scale.setScalar(scale);
 
     // Wheels 0 and 2 are the left-hand pair. Mirroring is opt-in because it
-    // reverses any lettering moulded into the tyre.
-    if (spec.mirrorLeftWheels && i % 2 === 0) {
+    // reverses any lettering moulded into the tyre, and it is meaningless
+    // for a model whose corners were built individually.
+    if (spec.mirrorLeftWheels && !resolved.perCorner && i % 2 === 0) {
       wheel.scale.x *= -1;
     }
     wheels.push(wheel);

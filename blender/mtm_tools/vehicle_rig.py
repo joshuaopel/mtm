@@ -24,6 +24,20 @@ RIG_COLLECTION = "MTM_VehicleRig"
 BODY_NAME = "MTM_Body"
 WHEEL_NAME = "MTM_Wheel"
 
+# Front-left, front-right, rear-left, rear-right — the order the game adds
+# wheels to its physics rig, so index 0 and 2 are always the left-hand pair.
+# Left is -X in both Blender and the game.
+WHEEL_CORNERS = ("FL", "FR", "RL", "RR")
+
+
+def wheel_slot_name(corner):
+    """`MTM_Wheel_FL` and friends: the per-corner slots you drag."""
+    return f"{WHEEL_NAME}_{corner}"
+
+
+def wheel_slot_names():
+    return [wheel_slot_name(corner) for corner in WHEEL_CORNERS]
+
 # Colours for reference parts, so the rig reads at a glance.
 COLOUR_CHASSIS = (1.0, 0.55, 0.1, 1.0)
 COLOUR_TRAVEL = (0.35, 0.7, 1.0, 1.0)
@@ -43,9 +57,53 @@ def rest_compression(settings):
     return min(settings.suspension_travel, 19.6 / (4 * max(1e-3, settings.suspension_stiffness)))
 
 
+def suspension_drop(settings):
+    """
+    Distance from the suspension mounting point down to the wheel centre at
+    rest — the extended spring length minus the squat under the truck's own
+    weight.
+    """
+    return settings.suspension_rest - rest_compression(settings)
+
+
 def ride_height(settings):
     """Height of the chassis origin (the centre of mass) above the ground."""
-    return settings.wheel_radius + (settings.suspension_rest - rest_compression(settings)) - settings.axle_height
+    return settings.wheel_radius + suspension_drop(settings) - settings.axle_height
+
+
+def wheel_rest_z(settings):
+    """
+    Height of a wheel centre in the scene, at rest.
+
+    Always the wheel radius, and that is not a simplification — it falls out
+    of the definitions. With the body at ride height H:
+
+        wheel_z = H + axle_height - drop
+        H       = wheel_radius + drop - axle_height
+
+    Substitute and the `axle_height` and `drop` terms both cancel, leaving
+    `wheel_z = wheel_radius`. A resting wheel touches the ground; where else
+    would it be?
+
+    The consequence matters for authoring: **dragging a wheel up or down
+    cannot tell you `axleHeight`.** It only says how big the tyre is. The
+    vertical degree of freedom the author actually controls is how high the
+    body floats over the axles, which is `axle_height_from_body_z` below.
+    """
+    return settings.wheel_radius
+
+
+def axle_height_from_body_z(settings, body_z):
+    """
+    Turn the height of the body origin — the centre of mass — into the
+    `axleHeight` the game wants.
+
+    Rearranged from `ride_height`, so raising the body lowers the strut mount
+    relative to it: the two move in opposite directions. This is the only
+    honest way to set `axleHeight` by dragging something, because it is the
+    only thing whose height depends on it.
+    """
+    return settings.wheel_radius + suspension_drop(settings) - body_z
 
 
 def clear_rig():
@@ -205,12 +263,18 @@ def build_rig(context):
     }
 
 
-def ensure_slots(context):
+def ensure_slots(context, per_corner=True):
     """
-    Create empty body and wheel slots if the scene has none.
+    Create the body and wheel slots if the scene has none.
 
     They are plain Empties: parent your own meshes to them, or rename your
     meshes to match. Either way the exporter finds them by name.
+
+    `per_corner` gives four wheel slots — `MTM_Wheel_FL`, `_FR`, `_RL`, `_RR`
+    — placed where the physics currently puts them and, unlike the reference
+    rings, selectable. Drag them and read the axle numbers back off. Turn it
+    off for the older single `MTM_Wheel` at the origin, cloned four times by
+    the runtime, which is still the right choice for a symmetric truck.
     """
     scene = context.scene
     collection = ensure_collection(scene)
@@ -226,6 +290,23 @@ def ensure_slots(context):
         collection.objects.link(body)
         created.append(BODY_NAME)
 
+    if per_corner:
+        rest_z = wheel_rest_z(settings)
+        for label, x, y in axle_positions(settings):
+            name = wheel_slot_name(label)
+            if bpy.data.objects.get(name) is not None:
+                continue
+            wheel = bpy.data.objects.new(name, None)
+            wheel.empty_display_type = "CIRCLE"
+            wheel.empty_display_size = settings.wheel_radius
+            # Lying on the axle, like the reference rings, so the circle
+            # reads as a tyre rather than a puddle.
+            wheel.rotation_euler = (0.0, 1.5707963, 0.0)
+            wheel.location = (x, y, rest_z)
+            collection.objects.link(wheel)
+            created.append(name)
+        return created
+
     if bpy.data.objects.get(WHEEL_NAME) is None:
         wheel = bpy.data.objects.new(WHEEL_NAME, None)
         wheel.empty_display_type = "CIRCLE"
@@ -236,3 +317,44 @@ def ensure_slots(context):
         created.append(WHEEL_NAME)
 
     return created
+
+
+def read_wheel_slots():
+    """
+    The per-corner wheel slots present in the scene, by label.
+
+    Returns `{}` unless all four are there — a partial set means the author
+    is mid-way through something, and guessing from two corners would write
+    nonsense into the settings.
+    """
+    found = {}
+    for corner in WHEEL_CORNERS:
+        obj = bpy.data.objects.get(wheel_slot_name(corner))
+        if obj is None:
+            return {}
+        found[corner] = obj
+    return found
+
+
+def axles_from_wheels(wheels):
+    """
+    Derive the axle numbers from four dragged wheel slots.
+
+    Track is the mean of the two |x| on an axle, so a slightly asymmetric
+    drag lands on something symmetric rather than putting one wheel further
+    out than the other — the physics has one half-track per axle and cannot
+    represent the difference anyway.
+    """
+    def axle(left, right):
+        half_track = (abs(left.matrix_world.translation.x) + abs(right.matrix_world.translation.x)) / 2.0
+        longitudinal = (left.matrix_world.translation.y + right.matrix_world.translation.y) / 2.0
+        return round(half_track, 3), round(longitudinal, 3)
+
+    front_track, front_z = axle(wheels["FL"], wheels["FR"])
+    rear_track, rear_z = axle(wheels["RL"], wheels["RR"])
+    return {
+        "front_track": front_track,
+        "front_z": front_z,
+        "rear_track": rear_track,
+        "rear_z": rear_z,
+    }

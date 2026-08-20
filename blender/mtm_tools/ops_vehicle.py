@@ -24,11 +24,19 @@ from mathutils import Vector
 from .vehicle_rig import (
     BODY_NAME,
     RIG_COLLECTION,
+    WHEEL_CORNERS,
     WHEEL_NAME,
+    axle_height_from_body_z,
+    axle_positions,
+    axles_from_wheels,
     build_rig,
     clear_rig,
     ensure_slots,
+    read_wheel_slots,
     ride_height,
+    wheel_rest_z,
+    wheel_slot_name,
+    wheel_slot_names,
 )
 
 
@@ -54,6 +62,21 @@ def _slot_meshes(name):
         if obj.parent is root and _exportable(obj):
             found.append(obj)
     return found
+
+
+def wheel_slots_in_use():
+    """
+    The wheel slot names this scene actually models, and whether they are
+    per-corner.
+
+    Per-corner wins when all four exist, because an author who made them
+    meant them. Falling back to the single slot keeps every truck built
+    before the corner slots existed working untouched.
+    """
+    corners = wheel_slot_names()
+    if all(bpy.data.objects.get(name) is not None for name in corners):
+        return corners, True
+    return [WHEEL_NAME], False
 
 
 class MTM_OT_build_vehicle_rig(Operator):
@@ -170,13 +193,14 @@ class MTM_OT_check_vehicle_model(Operator):
         problems = 0
 
         body = _slot_meshes(BODY_NAME)
-        wheel = _slot_meshes(WHEEL_NAME)
+        slot_names, per_corner = wheel_slots_in_use()
 
         if not body:
             self.report({"ERROR"}, f"No mesh named or parented to '{BODY_NAME}'.")
             problems += 1
-        if not wheel:
-            self.report({"ERROR"}, f"No mesh named or parented to '{WHEEL_NAME}'.")
+        empty_slots = [name for name in slot_names if not _slot_meshes(name)]
+        if empty_slots:
+            self.report({"ERROR"}, f"No mesh named or parented to '{', '.join(empty_slots)}'.")
             problems += 1
         if problems:
             return {"CANCELLED"}
@@ -207,30 +231,47 @@ class MTM_OT_check_vehicle_model(Operator):
             )
             problems += 1
 
-        # The wheel must be modelled at the origin: the runtime positions all
-        # four copies from the physics rig, so any offset here is applied on
-        # top and the wheels end up in the wrong place.
-        wheel_centre = Vector((0.0, 0.0, 0.0))
-        wheel_min = Vector((math.inf,) * 3)
-        wheel_max = Vector((-math.inf,) * 3)
-        for obj in wheel:
-            for corner in obj.bound_box:
-                world = obj.matrix_world @ Vector(corner)
-                for i in range(3):
-                    wheel_min[i] = min(wheel_min[i], world[i])
-                    wheel_max[i] = max(wheel_max[i], world[i])
-        wheel_centre = (wheel_min + wheel_max) * 0.5
+        # Where each wheel slot should sit. A single slot is modelled at the
+        # origin and cloned; per-corner slots are modelled where they belong,
+        # which is directly over the axle at exactly one wheel radius up —
+        # the height a resting wheel always has, whatever `axleHeight` is.
+        expected_at = {}
+        if per_corner:
+            rest_z = wheel_rest_z(settings)
+            for label, x, y in axle_positions(settings):
+                expected_at[wheel_slot_name(label)] = Vector((x, y, rest_z))
+        else:
+            expected_at[WHEEL_NAME] = Vector((0.0, 0.0, 0.0))
 
-        if wheel_centre.length > 0.15:
-            self.report(
-                {"WARNING"},
-                f"Wheel is {wheel_centre.length:.2f}m from the origin. Model it centred "
-                "on the origin — the game places all four copies itself.",
-            )
-            problems += 1
+        modelled_radius = 0.0
+        for name in slot_names:
+            wheel_min = Vector((math.inf,) * 3)
+            wheel_max = Vector((-math.inf,) * 3)
+            for obj in _slot_meshes(name):
+                for corner in obj.bound_box:
+                    world = obj.matrix_world @ Vector(corner)
+                    for i in range(3):
+                        wheel_min[i] = min(wheel_min[i], world[i])
+                        wheel_max[i] = max(wheel_max[i], world[i])
 
-        wheel_size = wheel_max - wheel_min
-        modelled_radius = max(wheel_size.y, wheel_size.z) * 0.5
+            centre = (wheel_min + wheel_max) * 0.5
+            drift = (centre - expected_at[name]).length
+            if drift > 0.15:
+                where = (
+                    f"its axle position {tuple(round(v, 2) for v in expected_at[name])}"
+                    if per_corner
+                    else "the origin"
+                )
+                self.report(
+                    {"WARNING"},
+                    f"{name} is {drift:.2f}m from {where}. The game places wheels from "
+                    "the physics numbers, so an offset here is applied on top.",
+                )
+                problems += 1
+
+            wheel_size = wheel_max - wheel_min
+            modelled_radius = max(modelled_radius, max(wheel_size.y, wheel_size.z) * 0.5)
+
         expected = settings.wheel_radius
         if modelled_radius > 1e-4 and abs(modelled_radius - expected) > expected * 0.15:
             self.report(
@@ -242,9 +283,10 @@ class MTM_OT_check_vehicle_model(Operator):
             problems += 1
 
         if problems == 0:
+            layout = "four corners" if per_corner else "one wheel, cloned"
             self.report(
                 {"INFO"},
-                f"Body and wheel line up. Centre of mass {com_height:.2f}m, "
+                f"Body and wheels line up ({layout}). Centre of mass {com_height:.2f}m, "
                 f"wheel radius {modelled_radius:.2f}m.",
             )
         return {"FINISHED"}
@@ -259,11 +301,17 @@ class MTM_OT_export_vehicle_model(Operator):
 
     def execute(self, context):
         settings = context.scene.mtm_vehicle
-        meshes = _slot_meshes(BODY_NAME) + _slot_meshes(WHEEL_NAME)
+        slot_names, per_corner = wheel_slots_in_use()
+        roots = [BODY_NAME] + slot_names
+
+        meshes = []
+        for name in roots:
+            meshes.extend(_slot_meshes(name))
         if not meshes:
             self.report(
                 {"ERROR"},
-                f"Nothing to export — create '{BODY_NAME}' and '{WHEEL_NAME}' meshes first.",
+                f"Nothing to export — create '{BODY_NAME}' and "
+                f"'{', '.join(slot_names)}' meshes first.",
             )
             return {"CANCELLED"}
 
@@ -285,7 +333,7 @@ class MTM_OT_export_vehicle_model(Operator):
             bpy.ops.object.select_all(action="DESELECT")
             # The named slot roots go too, so the node names survive into the
             # glTF for the runtime to find.
-            for name in (BODY_NAME, WHEEL_NAME):
+            for name in roots:
                 root = bpy.data.objects.get(name)
                 if root is not None:
                     root.select_set(True)
@@ -313,9 +361,10 @@ class MTM_OT_export_vehicle_model(Operator):
             context.view_layer.objects.active = previous_active
 
         settings.model_path = f"content/{glb_name}"
+        layout = "four corners" if per_corner else "one wheel"
         self.report(
             {"INFO"},
-            f"Exported {len(meshes)} mesh(es) -> {glb_name}. "
+            f"Exported {len(meshes)} mesh(es) ({layout}) -> {glb_name}. "
             "Export the vehicle JSON as well; it now references this model.",
         )
         return {"FINISHED"}
@@ -369,40 +418,56 @@ class MTM_OT_load_vehicle_preset(Operator):
 
 
 class MTM_OT_measure_vehicle_rig(Operator):
-    """Read wheel positions back off the reference rig into the settings"""
+    """Read the axle numbers back off the wheel slots you dragged"""
 
     bl_idname = "mtm.measure_vehicle_rig"
-    bl_label = "Read Back From Rig"
+    bl_label = "Read Axles From Wheels"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         settings = context.scene.mtm_vehicle
-        collection = bpy.data.collections.get(RIG_COLLECTION)
-        if collection is None:
-            self.report({"ERROR"}, "No reference rig in the scene — build one first.")
-            return {"CANCELLED"}
+        bpy.context.view_layer.update()
 
-        wheels = {}
-        for obj in collection.objects:
-            # Only the resting rings, not the droop/bump markers.
-            if obj.name.startswith("MTM_Ref_Wheel_") and obj.name.count("_") == 3:
-                wheels[obj.name.rsplit("_", 1)[-1]] = obj
+        wheels = read_wheel_slots()
+        source = "wheel slots"
 
-        if len(wheels) < 4:
-            self.report({"ERROR"}, "Reference rig is missing wheels; rebuild it.")
-            return {"CANCELLED"}
+        if not wheels:
+            # Fall back to the reference rings, which is all there was before
+            # the draggable slots existed.
+            collection = bpy.data.collections.get(RIG_COLLECTION)
+            if collection is not None:
+                for obj in collection.objects:
+                    if obj.name.startswith("MTM_Ref_Wheel_") and obj.name.count("_") == 3:
+                        wheels[obj.name.rsplit("_", 1)[-1]] = obj
+                source = "reference rig"
+            if len(wheels) < 4:
+                self.report(
+                    {"ERROR"},
+                    "No wheel slots to measure. Run 'Build Reference Rig' to create "
+                    f"{', '.join(wheel_slot_names())}, then drag them into place.",
+                )
+                return {"CANCELLED"}
 
-        front = [wheels["FL"], wheels["FR"]]
-        rear = [wheels["RL"], wheels["RR"]]
-        settings.front_track = round(sum(abs(w.location.x) for w in front) / 2.0, 3)
-        settings.rear_track = round(sum(abs(w.location.x) for w in rear) / 2.0, 3)
-        settings.front_z = round(sum(w.location.y for w in front) / 2.0, 3)
-        settings.rear_z = round(sum(w.location.y for w in rear) / 2.0, 3)
+        for key, value in axles_from_wheels(wheels).items():
+            setattr(settings, key, value)
+
+        # Height is deliberately not read from the wheels: a resting wheel
+        # always sits at its own radius whatever `axleHeight` is, so dragging
+        # one up or down says nothing about it. Ride height comes from the
+        # body instead.
+        body = bpy.data.objects.get(BODY_NAME)
+        note = ""
+        if body is not None:
+            wanted = axle_height_from_body_z(settings, body.matrix_world.translation.z)
+            if abs(wanted - settings.axle_height) > 1e-4:
+                settings.axle_height = round(wanted, 3)
+                note = f", axle height {settings.axle_height:.3f}m from the body"
 
         self.report(
             {"INFO"},
-            f"Read back: front axle {settings.front_z}m, rear axle {settings.rear_z}m, "
-            f"track {settings.front_track * 2:.2f}m.",
+            f"Read from {source}: wheelbase {abs(settings.front_z - settings.rear_z):.2f}m, "
+            f"front track {settings.front_track * 2:.2f}m, "
+            f"rear track {settings.rear_track * 2:.2f}m{note}.",
         )
         return {"FINISHED"}
 
