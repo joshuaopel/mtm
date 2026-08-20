@@ -19,6 +19,13 @@ const DETAIL_LABELS: Record<DetailLevel, string> = {
   hi: '720x540',
 };
 
+/**
+ * HUD sizes. The interface is laid out in CSS pixels, so a handheld gets the
+ * same pixel count as a monitor at a third of the physical size — 150% is
+ * what makes a Steam Deck readable at arm's length.
+ */
+export const UI_SCALES = [1, 1.25, 1.5, 1.75] as const;
+
 /* -------------------------------------------------------------------------
  * Title
  * ---------------------------------------------------------------------- */
@@ -352,22 +359,26 @@ export class ControlsScreen implements Screen {
   readonly root: HTMLElement;
   private onBack: () => void;
   private onDetailChange: (detail: DetailLevel) => void;
+  private onUiScaleChange: (scale: number) => void;
   private onToggleMute: () => boolean;
   private onToggleMusic: () => MusicState;
   private onCycleMusicVolume: () => MusicState;
 
   private detail: DetailLevel;
+  private uiScale: number;
   private muted = false;
   private music: MusicState;
   private menu: Menu;
 
   constructor(
     initialDetail: DetailLevel,
+    initialUiScale: number,
     initialMuted: boolean,
     initialMusic: MusicState,
     actions: {
       onBack(): void;
       onDetailChange(detail: DetailLevel): void;
+      onUiScaleChange(scale: number): void;
       onToggleMute(): boolean;
       onToggleMusic(): MusicState;
       onCycleMusicVolume(): MusicState;
@@ -375,10 +386,12 @@ export class ControlsScreen implements Screen {
   ) {
     this.onBack = actions.onBack;
     this.onDetailChange = actions.onDetailChange;
+    this.onUiScaleChange = actions.onUiScaleChange;
     this.onToggleMute = actions.onToggleMute;
     this.onToggleMusic = actions.onToggleMusic;
     this.onCycleMusicVolume = actions.onCycleMusicVolume;
     this.detail = initialDetail;
+    this.uiScale = initialUiScale;
     this.muted = initialMuted;
     this.music = initialMusic;
 
@@ -433,6 +446,16 @@ export class ControlsScreen implements Screen {
           const order: DetailLevel[] = ['lo', 'med', 'hi'];
           this.detail = order[(order.indexOf(this.detail) + 1) % order.length];
           this.onDetailChange(this.detail);
+          this.rebuild();
+        },
+      },
+      {
+        label: 'HUD SIZE',
+        tag: `${Math.round(this.uiScale * 100)}%`,
+        onSelect: () => {
+          const next = (UI_SCALES.indexOf(this.uiScale as (typeof UI_SCALES)[number]) + 1) % UI_SCALES.length;
+          this.uiScale = UI_SCALES[next];
+          this.onUiScaleChange(this.uiScale);
           this.rebuild();
         },
       },

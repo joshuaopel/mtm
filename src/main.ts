@@ -61,6 +61,15 @@ class Game {
 
   private lastFrame = performance.now();
   private detail: DetailLevel = 'lo';
+  /**
+   * HUD size multiplier.
+   *
+   * The interface is sized in CSS pixels, which is right on a monitor and
+   * small on a 7-inch handheld held at arm's length — same pixel count, a
+   * third of the physical size. This scales the chrome without touching the
+   * 3D, which has its own resolution setting.
+   */
+  private uiScale = 1;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.uiRoot = uiRoot;
@@ -315,6 +324,11 @@ class Game {
     this.session?.setAspect(this.renderer.aspect);
   }
 
+  /** Push the HUD size into the stylesheet variable everything reads. */
+  private applyUiScale(): void {
+    document.documentElement.style.setProperty('--ui-scale', String(this.uiScale));
+  }
+
   private setScreen(screen: Screen | null, mode: Mode): void {
     this.screen?.onUnmount?.();
     this.uiRoot.replaceChildren();
@@ -346,12 +360,16 @@ class Game {
 
   private showControls(): void {
     this.setScreen(
-      new ControlsScreen(this.detail, this.audio.isMuted, this.musicState(), {
+      new ControlsScreen(this.detail, this.uiScale, this.audio.isMuted, this.musicState(), {
         onBack: () => this.showTitle(),
         onDetailChange: (detail) => {
           this.detail = detail;
           this.renderer.setDetail(detail);
           this.resize();
+        },
+        onUiScaleChange: (scale) => {
+          this.uiScale = scale;
+          this.applyUiScale();
         },
         onToggleMute: () => {
           this.audio.setMuted(!this.audio.isMuted);

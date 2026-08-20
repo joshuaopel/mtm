@@ -381,9 +381,24 @@ Framing is tunable from the query string —
 `?bearing=2&dist=15&height=1.2&fov=56&aim=3` are the defaults. Screenshot the
 page at 1600x760 (at 2x device scale for a crisp one) and you have the poster.
 
-## Steam
+## Steam Deck
 
-The renderer, input and audio are already isolated behind small interfaces, and
-the game has no server dependency, so wrapping the build in Electron or Tauri
-is the expected path to a desktop release. Gamepad input is already handled
-through the standard mapping.
+It runs on a Deck today, without packaging it into an executable:
+`npm run build`, copy `dist/` and `deck/monster-truck-mania.sh` across, add the
+script to Steam as a non-Steam game. [`docs/steam-deck.md`](docs/steam-deck.md)
+is the full walkthrough.
+
+The one step that is easy to miss: set the game's controller layout to
+**Gamepad** rather than the desktop default, or Steam Input feeds the browser
+keyboard and mouse events and the Gamepad API sees no pad at all. Buttons will
+still work through the menus, which makes it look like the sticks are broken.
+
+The launcher serves the build on localhost rather than opening it from disk,
+because the game fetches its content files at startup and `fetch()` is blocked
+on `file://`. It uses the Python that SteamOS already ships and shuts down with
+the browser.
+
+Longer term, wrapping the same build in Electron or Tauri gives a binary with
+no browser dependency. The renderer, input and audio are already isolated
+behind small interfaces and there is no server dependency, so that is a
+packaging job rather than a port.
