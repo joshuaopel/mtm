@@ -666,5 +666,100 @@ class TestWheelSlots(BlenderCase):
         self.assertAlmostEqual(self.vehicle.front_z, 9.9, places=4)
 
 
+class TestResponsivePanels(BlenderCase):
+    """
+    Widening the sidebar should buy columns, not just wider fields.
+
+    The visual result needs a real UI session, so what is pinned here is the
+    rule that decides the column count, the fact that it degrades to the old
+    single-column layout when there is nothing to measure, and that the
+    grid_flow signature the panels call still exists.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from mtm_tools import ui
+
+        self.ui = ui
+
+    def test_a_default_width_sidebar_stays_one_column(self):
+        # Blender's sidebar opens around 240px and is usually left near it.
+        for width in (180, 240, 299):
+            self.assertEqual(self.ui.section_columns(width), 1, f"at {width}px")
+
+    def test_dragging_wider_earns_a_second_and_third_column(self):
+        self.assertEqual(self.ui.section_columns(600), 2)
+        self.assertEqual(self.ui.section_columns(900), 3)
+
+    def test_columns_are_capped_so_fields_stay_readable(self):
+        self.assertEqual(self.ui.section_columns(4000), self.ui.SECTION_MAX_COLUMNS)
+
+    def test_ui_scale_is_divided_out(self):
+        """
+        A 2x display has twice the pixels for the same apparent size, so the
+        same physical drag must produce the same column count.
+        """
+        self.assertEqual(
+            self.ui.section_columns(1200, ui_scale=2.0),
+            self.ui.section_columns(600, ui_scale=1.0),
+        )
+
+    def test_a_zero_ui_scale_does_not_divide_by_zero(self):
+        """Blender reports ui_scale as 0.0 when running headless."""
+        self.assertEqual(self.ui.section_columns(600, ui_scale=0.0), 2)
+
+    def test_no_region_means_no_reflow(self):
+        """
+        `context.region` is absent in some contexts. Falling back to one
+        column keeps the panel drawing exactly as it always did.
+        """
+        self.assertEqual(self.ui.section_columns(0), 1)
+        self.assertEqual(self.ui.section_columns(None), 1)
+
+    def test_sections_returns_the_plain_layout_when_it_cannot_measure(self):
+        class Layout:
+            def grid_flow(self, **kwargs):
+                raise AssertionError("must not reflow without a width to go on")
+
+        layout = Layout()
+        self.assertIs(self.ui.sections(layout, bpy.context), layout)
+
+    def test_the_grid_flow_signature_the_panels_rely_on_still_exists(self):
+        params = {
+            p.identifier
+            for p in bpy.types.UILayout.bl_rna.functions["grid_flow"].parameters
+        }
+        self.assertTrue({"row_major", "columns", "even_columns"} <= params)
+
+    def test_every_reflowing_panel_is_registered_and_draws_from_sections(self):
+        import inspect
+
+        reflowing = [
+            "MTM_PT_track_road",
+            "MTM_PT_track_paint",
+            "MTM_PT_track_collision",
+            "MTM_PT_vehicle_physics",
+            "MTM_PT_vehicle_response",
+            "MTM_PT_vehicle_model",
+        ]
+        for name in reflowing:
+            panel = getattr(bpy.types, name, None)
+            self.assertIsNotNone(panel, f"{name} is not registered")
+            source = inspect.getsource(getattr(self.ui, name).draw)
+            self.assertIn("sections(self.layout, context)", source, name)
+
+    def test_a_panels_header_control_stays_out_of_the_grid(self):
+        """
+        Ground Textures leads with a mode switch that governs the sections
+        below it. In the flow it would become a cell beside them.
+        """
+        import inspect
+
+        source = inspect.getsource(self.ui.MTM_PT_track_paint.draw)
+        header, _, rest = source.partition("layout = sections(")
+        self.assertIn('self.layout.prop(settings, "paint_mode"', header)
+        self.assertNotIn("layout.prop(settings, \"paint_mode\"", rest)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

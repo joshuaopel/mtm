@@ -15,6 +15,61 @@ from .palette import COLUMNS as PALETTE_COLUMNS, PALETTE
 from .props import SIZED_PROP_KINDS, TEXTURED_PROP_KINDS
 
 
+#
+# Responsive sections
+#
+# The sidebar is a tall single column by default, which means most of these
+# panels scroll. Blender will not reflow a panel by itself, but it will lay
+# children out in a grid, and a panel can read the width it has been given —
+# so widening the sidebar can buy columns instead of just wider fields, the
+# way the 3ds Max command panel does it.
+#
+
+# Logical pixels a section needs before it is worth splitting one off. Below
+# this the labels start truncating and two cramped columns are worse than one
+# readable one.
+SECTION_MIN_WIDTH = 300
+
+# Past three the property fields get too narrow to read the values in, and
+# you are scanning sideways instead of down.
+SECTION_MAX_COLUMNS = 3
+
+
+def section_columns(width, ui_scale=1.0, min_width=SECTION_MIN_WIDTH, maximum=SECTION_MAX_COLUMNS):
+    """
+    How many columns a region of `width` pixels should get.
+
+    Pure so it can be tested without a UI. `ui_scale` is divided out to work
+    in logical pixels, because a 4K screen at 2x scale has twice the pixels
+    for the same apparent size — and it is guarded, because Blender reports
+    a scale of 0.0 when running headless.
+    """
+    if not width or width <= 0:
+        return 1
+    scale = ui_scale if ui_scale and ui_scale > 0 else 1.0
+    return max(1, min(maximum, int((width / scale) // min_width)))
+
+
+def sections(layout, context):
+    """
+    A layout to add this panel's `box()` sections to.
+
+    Returns the layout unchanged when there is only room for one column, so
+    the narrow case costs nothing and looks exactly as it did. Otherwise it
+    returns a column-major grid: sections fill down the first column and then
+    move to the next, which is how you would read the panel if it had simply
+    been cut in half.
+    """
+    region = getattr(context, "region", None)
+    preferences = getattr(context, "preferences", None)
+    scale = getattr(getattr(preferences, "system", None), "ui_scale", 1.0)
+
+    columns = section_columns(getattr(region, "width", 0), scale)
+    if columns < 2:
+        return layout
+    return layout.grid_flow(row_major=False, columns=columns, even_columns=True)
+
+
 class MTMPanel:
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -49,7 +104,7 @@ class MTM_PT_track_road(MTMPanel, Panel):
     bl_parent_id = "MTM_PT_track"
 
     def draw(self, context):
-        layout = self.layout
+        layout = sections(self.layout, context)
         settings = context.scene.mtm_track
 
         box = layout.box()
@@ -100,15 +155,19 @@ class MTM_PT_track_paint(MTMPanel, Panel):
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
-        layout = self.layout
         settings = context.scene.mtm_track
 
-        layout.prop(settings, "paint_mode", expand=True)
+        # The mode switch heads the panel whatever the width, so it stays on
+        # the panel's own layout — put it in the flow and it becomes a grid
+        # cell sitting alongside the sections it is supposed to govern.
+        self.layout.prop(settings, "paint_mode", expand=True)
 
         if settings.paint_mode == "auto":
-            layout.label(text="Rock on steep ground, worn verge by the road.", icon="INFO")
-            layout.label(text="Chosen from the Surface theme.")
+            self.layout.label(text="Rock on steep ground, worn verge by the road.", icon="INFO")
+            self.layout.label(text="Chosen from the Surface theme.")
             return
+
+        layout = sections(self.layout, context)
 
         box = layout.box()
         box.label(text="Layers", icon="TEXTURE")
@@ -221,7 +280,7 @@ class MTM_PT_track_collision(MTMPanel, Panel):
     bl_parent_id = "MTM_PT_track"
 
     def draw(self, context):
-        layout = self.layout
+        layout = sections(self.layout, context)
 
         box = layout.box()
         box.label(text="Colliders", icon="MESH_ICOSPHERE")
@@ -352,7 +411,7 @@ class MTM_PT_vehicle_physics(MTMPanel, Panel):
     bl_parent_id = "MTM_PT_vehicle"
 
     def draw(self, context):
-        layout = self.layout
+        layout = sections(self.layout, context)
         settings = context.scene.mtm_vehicle
 
         box = layout.box()
@@ -399,7 +458,7 @@ class MTM_PT_vehicle_response(MTMPanel, Panel):
     bl_parent_id = "MTM_PT_vehicle"
 
     def draw(self, context):
-        layout = self.layout
+        layout = sections(self.layout, context)
         h = handling_numbers(context.scene.mtm_vehicle)
 
         # These are all derived from the settings above. They are what
@@ -504,7 +563,7 @@ class MTM_PT_vehicle_model(MTMPanel, Panel):
     bl_parent_id = "MTM_PT_vehicle"
 
     def draw(self, context):
-        layout = self.layout
+        layout = sections(self.layout, context)
         settings = context.scene.mtm_vehicle
 
         box = layout.box()

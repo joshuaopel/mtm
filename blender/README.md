@@ -15,6 +15,18 @@ property APIs differ in places the add-on guards for but cannot exercise here.
 3. Enable **MTM Tools**.
 4. The panels live in the 3D viewport sidebar — press <kbd>N</kbd>, **MTM** tab.
 
+### The sidebar reflows
+
+Drag the sidebar's left edge wider and the taller panels — Road & Terrain,
+Ground Textures, Collision, Physics, Response, Reference Rig & Model — split
+into two columns, and three if you keep going, instead of getting wider fields
+and the same scrollbar. Sections fill down the first column before moving to
+the next, so it reads like the panel was cut in half rather than reshuffled.
+
+Each column wants about 300 logical pixels before it earns its place, so the
+default sidebar width still gets the single column it was designed for.
+`SECTION_MIN_WIDTH` in `ui.py` is the threshold if you want it keener.
+
 ## Building a track
 
 The add-on works by tagging objects with a **role**. Only tagged objects are
