@@ -61,9 +61,48 @@ namespace MonsterTruckMania.Generation
             Step = Length / count;
 
             _cell = Math.Max(8.0, width * 0.5 + shoulder + 4.0);
-            for (int i = 0; i < points.Count; i++)
+            BuildBuckets();
+        }
+
+        /// <summary>
+        /// Build from samples that are already spaced, skipping the spline.
+        /// </summary>
+        /// <remarks>
+        /// For a road that came from data rather than from control points —
+        /// a track authored elsewhere, or a baked path — where re-splining
+        /// would move it slightly. Also what the terrain tests use, so a
+        /// straight road can be stated exactly rather than approximated by
+        /// control points that happen to produce one.
+        /// </remarks>
+        public static RoadPath FromSamples(IReadOnlyList<Vec3> samples, bool closed,
+                                           double width, double shoulder, double step)
+        {
+            return new RoadPath(samples, closed, width, shoulder, step, true);
+        }
+
+        private RoadPath(IReadOnlyList<Vec3> samples, bool closed, double width, double shoulder,
+                         double step, bool preSampled)
+        {
+            _ = preSampled;
+            Width = width;
+            Shoulder = shoulder;
+            Closed = closed;
+            Points = new List<Vec3>(samples);
+            Step = step;
+
+            double length = 0.0;
+            for (int i = 0; i < Points.Count - 1; i++) length += Vec3.Distance(Points[i], Points[i + 1]);
+            Length = length;
+
+            _cell = Math.Max(8.0, width * 0.5 + shoulder + 4.0);
+            BuildBuckets();
+        }
+
+        private void BuildBuckets()
+        {
+            for (int i = 0; i < Points.Count; i++)
             {
-                long key = Key((int)Math.Floor(points[i].X / _cell), (int)Math.Floor(points[i].Z / _cell));
+                long key = Key((int)Math.Floor(Points[i].X / _cell), (int)Math.Floor(Points[i].Z / _cell));
                 if (!_buckets.TryGetValue(key, out var list))
                 {
                     list = new List<int>();

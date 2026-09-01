@@ -50,6 +50,7 @@ namespace MonsterTruckMania.Tests
             NoiseMatchesTheTypeScript();
             CurveMatchesThree();
             RoadResamplingIsEven();
+            TerrainMatchesTheWebGame();
 
             Console.WriteLine($"\n{_checks - _failures}/{_checks} checks passed.");
             if (_failures > 0) Console.WriteLine($"{_failures} FAILED");
@@ -230,6 +231,92 @@ namespace MonsterTruckMania.Tests
             Check(agrees, "bucket lookup matches a brute-force nearest search within its guaranteed radius");
             Check(fine.SearchRadius > 20.0 * 0.5 + 10.0,
                   "guaranteed radius covers the full carved corridor");
+        }
+
+        // ------------------------------------------------------------------
+        // Terrain
+        // ------------------------------------------------------------------
+
+        private static TerrainField Field(double amplitude = 10.0,
+                                          IEnumerable<TerrainFeature> features = null,
+                                          RoadPath road = null)
+        {
+            return TerrainField.Generate(400.0, 32, amplitude, 0.01, 4242, features, road);
+        }
+
+        private static void TerrainMatchesTheWebGame()
+        {
+            Section("terrain");
+
+            TerrainField a = Field();
+            TerrainField b = Field();
+            Check(a.Heights.Length == 33 * 33, "grid is (segments+1) squared");
+            bool identical = true;
+            for (int i = 0; i < a.Heights.Length; i++)
+            {
+                if (a.Heights[i] != b.Heights[i]) identical = false;
+            }
+            Check(identical, "generation is deterministic for a seed");
+
+            // The rim lift makes the world a bowl rather than ending at a
+            // cliff you can drive off.
+            Check(a.Heights[a.Index(0, 0)] > a.Heights[a.Index(16, 16)],
+                  "the rim sits above the middle");
+
+            TerrainField flat = Field(amplitude: 0.0);
+            TerrainField hilly = Field(amplitude: 0.0, features: new[]
+            {
+                new TerrainFeature { Kind = FeatureKind.Hill, X = 0, Z = 0, Radius = 80, Height = 25 },
+            });
+            Near(hilly.Heights[hilly.Index(16, 16)] - flat.Heights[flat.Index(16, 16)], 25.0, 0.5,
+                 "a hill raises the ground under it by its height");
+
+            TerrainField dug = Field(amplitude: 0.0, features: new[]
+            {
+                new TerrainFeature { Kind = FeatureKind.Crater, X = 0, Z = 0, Radius = 80, Height = 15 },
+            });
+            Check(dug.Heights[dug.Index(16, 16)] < flat.Heights[flat.Index(16, 16)] - 10,
+                  "a crater lowers it");
+
+            // A straight road at height 5 must flatten the ground to 5
+            // wherever it passes, whatever the noise was doing underneath.
+            var samples = new List<Vec3>();
+            for (int x = -200; x <= 200; x += 2) samples.Add(new Vec3(x, 5.0, 0.0));
+            RoadPath road = RoadPath.FromSamples(samples, false, 20.0, 10.0, 2.0);
+
+            TerrainField carved = Field(road: road);
+            bool flatUnderRoad = true;
+            for (int ix = 12; ix <= 20; ix++)
+            {
+                if (Math.Abs(carved.Heights[carved.Index(ix, 16)] - 5.0) > 0.6) flatUnderRoad = false;
+            }
+            Check(flatUnderRoad, "the road is carved flat to its own height");
+
+            // And the carve must be local: a corner is far outside road width
+            // plus shoulder and should be untouched.
+            TerrainField uncarved = Field();
+            Near(carved.Heights[carved.Index(0, 0)], uncarved.Heights[uncarved.Index(0, 0)], 1e-9,
+                 "ground far from the road is untouched");
+
+            // Bilinear sampling has to agree with the grid it samples, or
+            // props sit above or below the ground they were dropped onto.
+            bool samplesAgree = true;
+            for (int iz = 0; iz <= 32; iz += 7)
+            {
+                for (int ix = 0; ix <= 32; ix += 7)
+                {
+                    double direct = carved.Heights[carved.Index(ix, iz)];
+                    double sampled = carved.SampleHeight(carved.WorldX(ix), carved.WorldZ(iz));
+                    if (Math.Abs(direct - sampled) > 1e-9) samplesAgree = false;
+                }
+            }
+            Check(samplesAgree, "SampleHeight lands exactly on grid points");
+
+            // Flat ground must read as flat, or the automatic paint rules put
+            // rock everywhere.
+            TerrainField level = Field(amplitude: 0.0);
+            Near(level.SlopeAt(16, 16), 0.0, 1e-6, "flat ground has zero slope");
+            Check(hilly.SlopeAt(20, 16) > 0.05, "a hillside reads as sloped");
         }
     }
 }
