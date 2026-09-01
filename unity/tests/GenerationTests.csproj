@@ -1,0 +1,32 @@
+<!--
+  Offline harness for the generation core.
+
+  The code under Runtime/Generation is deliberately free of UnityEngine types,
+  which means it compiles and runs here, under a plain .NET SDK, with no Unity
+  and no editor. That is the whole point: the spline and noise are ported from
+  the web game, and this checks the port against reference values printed from
+  the running JavaScript rather than trusting that it reads the same.
+
+  Run with:  dotnet run  (from this folder)
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>GenerationTests</AssemblyName>
+    <RootNamespace>MonsterTruckMania.Tests</RootNamespace>
+    <!-- Warnings are errors: this code cannot be compiled by its real host
+         from here, so anything the compiler can catch, it should. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../MonsterTruckMania/Assets/MonsterTruckMania/Runtime/Generation/**/*.cs" />
+    <Compile Include="*.cs" />
+  </ItemGroup>
+
+</Project>

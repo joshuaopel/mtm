@@ -1,0 +1,45 @@
+# Unity generates all of this on open. None of it belongs in the repo, and
+# Library/ in particular is gigabytes of import cache.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]in/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Never commit these: they are per-machine and cause merge conflicts.
+/[Aa]ssets/AssetStoreTools*
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Visual Studio / Rider project files, regenerated from the Unity project.
+.vs/
+.idea/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# The offline test harness is a real project file and is meant to be tracked.
+!tests/GenerationTests.csproj
+
+# Crash reports and build artefacts.
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+crashlytics-build.properties
