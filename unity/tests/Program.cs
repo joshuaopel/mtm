@@ -10,6 +10,7 @@
 using System;
 using System.Collections.Generic;
 using MonsterTruckMania.Generation;
+using MonsterTruckMania.Simulation;
 
 namespace MonsterTruckMania.Tests
 {
@@ -51,6 +52,10 @@ namespace MonsterTruckMania.Tests
             CurveMatchesThree();
             RoadResamplingIsEven();
             TerrainMatchesTheWebGame();
+            RoadQueriesAnswerOffTheRoad();
+            HandlingMatchesTheTypeScript();
+            TheDriveModelObeysItsRules();
+            TheRaceDirectorCountsLapsAndPositions();
 
             Console.WriteLine($"\n{_checks - _failures}/{_checks} checks passed.");
             if (_failures > 0) Console.WriteLine($"{_failures} FAILED");
@@ -318,5 +323,321 @@ namespace MonsterTruckMania.Tests
             Near(level.SlopeAt(16, 16), 0.0, 1e-6, "flat ground has zero slope");
             Check(hilly.SlopeAt(20, 16) > 0.05, "a hillside reads as sloped");
         }
+
+        // ------------------------------------------------------------------
+        // Road queries
+        // ------------------------------------------------------------------
+
+        /// <summary>A closed 200m square loop, sampled every 2m.</summary>
+        private static RoadPath SquareLoop()
+        {
+            var samples = new List<Vec3>();
+            const double side = 200.0;
+            const double step = 2.0;
+            for (double d = 0; d < side; d += step) samples.Add(new Vec3(d, 0, 0));
+            for (double d = 0; d < side; d += step) samples.Add(new Vec3(side, 0, d));
+            for (double d = 0; d < side; d += step) samples.Add(new Vec3(side - d, 0, side));
+            for (double d = 0; d < side; d += step) samples.Add(new Vec3(0, 0, side - d));
+            return RoadPath.FromSamples(samples, true, 14.0, 6.0, step);
+        }
+
+        /// <summary>
+        /// The AI and the lap counter query the road every frame, including on
+        /// the frames where a truck has been launched off a jump or shoved into
+        /// the scenery. The bucket lookup gives up out there; the query must
+        /// not, or an airborne truck stops making progress and the AI drives
+        /// into the nearest hill.
+        /// </summary>
+        private static void RoadQueriesAnswerOffTheRoad()
+        {
+            Section("road queries");
+            RoadPath road = SquareLoop();
+
+            RoadQuery near = road.Query(100.0, 0.0);
+            Near(near.Point.X, 100.0, 1.5, "a query on the road finds the road");
+            Near(Math.Abs(near.Lateral), 0.0, 1.5, "and reports no lateral offset");
+
+            // Far outside every bucket: the fallback sweep has to answer.
+            RoadQuery far = road.Query(100.0, -4000.0);
+            Check(far.Index >= 0, "a query far off the course still returns a sample");
+            Near(far.Point.Z, 0.0, 1e-9, "and finds the nearest edge of the loop");
+
+            // The sign convention, stated against RightAt rather than against
+            // a hardcoded axis — the two must agree, because the AI's lane
+            // offsets are built from RightAt and its reverse-out manoeuvre
+            // steers on the sign of Lateral. Travelling +X along the first
+            // side of the loop, right is -Z: in a left-handed frame, facing
+            // +X puts your right hand towards -Z.
+            int side = road.Points.Count / 8;
+            Vec3 on = road.PointAt(side);
+            Vec3 right = road.RightAt(side);
+            Vec3 offsetRight = on + right * 30.0;
+            Vec3 offsetLeft = on + right * -30.0;
+            Check(road.Query(offsetRight.X, offsetRight.Z).Lateral > 0,
+                  "right of the racing line is positive");
+            Check(road.Query(offsetLeft.X, offsetLeft.Z).Lateral < 0,
+                  "left of the racing line is negative");
+            Near(road.Query(offsetRight.X, offsetRight.Z).Lateral, 30.0, 1.5,
+                 "and the magnitude is the distance off the line");
+
+            // A lap of a square turns through exactly 2pi.
+            double turned = 0;
+            int quarter = road.Points.Count / 4;
+            for (int i = 0; i < 4; i++) turned += Math.Abs(road.CurvatureAt(i * quarter + quarter / 2, quarter));
+            Near(turned, 2.0 * Math.PI, 0.2, "a lap of a square turns through 2pi");
+
+            Check(road.Wrap(road.Points.Count + 3) == 3, "a closed road wraps its indices");
+            RoadPath open = RoadPath.FromSamples(new List<Vec3> { new Vec3(0, 0, 0), new Vec3(0, 0, 2) }, false, 14, 6, 2);
+            Check(open.Wrap(99) == 1, "an open road clamps rather than wrapping");
+        }
+
+        // ------------------------------------------------------------------
+        // Handling numbers
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Per stock truck: the ten derived numbers and the two verdicts,
+        /// printed from the running src/game/handling.ts. These are the whole
+        /// reason the formulas can live in four languages at once — every one
+        /// of them is pinned here.
+        /// </summary>
+        private static readonly (string Id, double RestCompression, double RideHeight, double RideFrequency,
+                                 double Rebound, double Compression, double Drive, double LiftThreshold,
+                                 double WheelieMargin, double Launch, double BumpHeadroom,
+                                 string DampingVerdict, string WheelieVerdict)[] HandlingReference =
+        {
+            ("boulder-hog", 0.24500000000000002, 2.025, 1.4235250868343543, 0.2683281572999748, 0.5142956348249516, 16800, 27565.827160493835, 0.6094502407704653, 10.5, 0.8550000000000001, "bouncy", "lifts"),
+            ("mud-marshal", 0.17500000000000002, 2.095, 1.6843375973911696, 0.2929224665821511, 0.5480484858633795, 20800, 39134.5107398568, 0.5315001927139491, 8.851063829787234, 0.825, "bouncy", "lifts"),
+            ("sky-ripper", 0.30625, 2.29375, 1.2732395447351628, 0.25, 0.55, 15600, 21598.238692098093, 0.7222811184926574, 10.985915492957746, 1.1437499999999998, "bouncy", "wheelies"),
+            ("iron-bull", 0.18846153846153849, 2.081538461538462, 1.623068321020647, 0.26475678243654843, 0.49029033784546006, 22400, 32683.325942350333, 0.6853647648807545, 11.487179487179487, 0.7115384615384616, "bouncy", "lifts"),
+            ("dust-devil", 0.3266666666666667, 1.8833333333333333, 1.2328088881229997, 0.25819888974716115, 0.5422176684690384, 13200, 21859.030088495576, 0.6038694281750026, 11.186440677966102, 0.8233333333333333, "bouncy", "lifts"),
+            ("nitro-hawk", 0.1814814814814815, 1.9885185185185188, 1.6539866862653763, 0.32716515254078793, 0.5773502691896258, 18400, 28948.787483702738, 0.6356052048935944, 11.151515151515152, 0.6185185185185186, "bouncy", "lifts"),
+        };
+
+        private static void HandlingMatchesTheTypeScript()
+        {
+            Section("handling numbers, against the TypeScript");
+
+            foreach (var expected in HandlingReference)
+            {
+                VehicleSpec spec = StockVehicles.ById(expected.Id);
+                Check(spec != null, $"{expected.Id} is in the roster");
+                if (spec == null) continue;
+
+                HandlingNumbers n = Handling.Numbers(spec);
+                Near(n.RestCompression, expected.RestCompression, 1e-12, $"{expected.Id} rest compression");
+                Near(n.RideHeight, expected.RideHeight, 1e-12, $"{expected.Id} ride height");
+                Near(n.RideFrequency, expected.RideFrequency, 1e-12, $"{expected.Id} ride frequency");
+                Near(n.ReboundDamping, expected.Rebound, 1e-12, $"{expected.Id} rebound damping");
+                Near(n.CompressionDamping, expected.Compression, 1e-12, $"{expected.Id} compression damping");
+                Near(n.DriveForce, expected.Drive, 1e-9, $"{expected.Id} drive force");
+                Near(n.FrontLiftThreshold, expected.LiftThreshold, 1e-9, $"{expected.Id} front lift threshold");
+                Near(n.WheelieMargin, expected.WheelieMargin, 1e-12, $"{expected.Id} wheelie margin");
+                Near(n.LaunchAcceleration, expected.Launch, 1e-12, $"{expected.Id} launch acceleration");
+                Near(n.BumpHeadroom, expected.BumpHeadroom, 1e-12, $"{expected.Id} bump headroom");
+                Check(Handling.DampingVerdict(n.ReboundDamping) == expected.DampingVerdict,
+                      $"{expected.Id} damping reads as {expected.DampingVerdict}");
+                Check(Handling.WheelieVerdict(n.WheelieMargin) == expected.WheelieVerdict,
+                      $"{expected.Id} wheelie margin reads as {expected.WheelieVerdict}");
+            }
+
+            // The relationships the tuning advice in the README rests on.
+            VehicleSpec stock = StockVehicles.BoulderHog();
+            VehicleSpec stiffer = stock.Clone();
+            stiffer.SuspensionStiffness *= 2.0;
+            Check(Handling.Numbers(stiffer).RideHeight > Handling.Numbers(stock).RideHeight,
+                  "stiffer springs raise the truck");
+
+            VehicleSpec heavier = stock.Clone();
+            heavier.Mass *= 2.0;
+            Near(Handling.Numbers(heavier).ReboundDamping, Handling.Numbers(stock).ReboundDamping, 1e-12,
+                 "the damping ratio does not depend on mass");
+            Near(Handling.Numbers(heavier).RestCompression, Handling.Numbers(stock).RestCompression, 1e-12,
+                 "nor does resting squat");
+
+            VehicleSpec tall = stock.Clone();
+            tall.AxleHeight -= 0.5;
+            Check(Handling.Numbers(tall).WheelieMargin > Handling.Numbers(stock).WheelieMargin,
+                  "a taller truck wheelies more easily");
+        }
+
+        // ------------------------------------------------------------------
+        // The drive model
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Every decision in the control layer is a rule rather than a physical
+        /// law, and each of these is one that was arrived at by playing the web
+        /// game rather than derived. They are worth holding still.
+        /// </summary>
+        private static void TheDriveModelObeysItsRules()
+        {
+            Section("the drive model");
+            VehicleSpec spec = StockVehicles.BoulderHog();
+
+            var model = new DriveModel(spec);
+            DriveDemand demand = model.Step(new DriveInput { Throttle = 1.0 }, 0.0, 1.0 / 60.0);
+            Near(demand.EngineForce, spec.EngineForce, 1e-9, "full throttle from rest gives full drive");
+            Check(demand.BrakeForce == 0.0, "and no brake");
+
+            // Drive tapers to nothing at the soft top speed rather than being
+            // clamped, so the truck coasts up to it instead of hitting a wall.
+            demand = model.Step(new DriveInput { Throttle = 1.0 }, spec.TopSpeed, 1.0 / 60.0);
+            Near(demand.EngineForce, 0.0, 1e-9, "drive tapers to nothing at top speed");
+
+            // The brake pedal becomes reverse once stopped. This is the rule
+            // the grid hold exists to work around.
+            model = new DriveModel(spec);
+            demand = model.Step(new DriveInput { Brake = 1.0 }, 12.0, 1.0 / 60.0);
+            Check(demand.BrakeForce > 0.0 && demand.EngineForce == 0.0, "braking at speed brakes");
+            demand = model.Step(new DriveInput { Brake = 1.0 }, 0.0, 1.0 / 60.0);
+            Check(demand.EngineForce < 0.0, "braking at a standstill reverses");
+            Check(Math.Abs(demand.EngineForce) < spec.EngineForce,
+                  "and reverse is weaker than forward drive");
+
+            model = new DriveModel(spec);
+            demand = model.Step(new DriveInput { Parked = true, Throttle = 1.0 }, 0.0, 1.0 / 60.0);
+            Check(demand.EngineForce == 0.0 && demand.BrakeForce > spec.HandbrakeForce,
+                  "a parked truck ignores the throttle and holds the line");
+
+            // Coasting: light engine braking while moving, a hard hold once
+            // stopped, or a truck parked on a camber slides away on its own.
+            model = new DriveModel(spec);
+            demand = model.Step(DriveInput.Idle, 10.0, 1.0 / 60.0);
+            Check(demand.BrakeForce > 0.0 && demand.BrakeForce < spec.BrakeForce, "lifting off brakes lightly");
+            demand = model.Step(DriveInput.Idle, 0.0, 1.0 / 60.0);
+            Near(demand.BrakeForce, spec.HandbrakeForce, 1e-9, "a stopped truck is held");
+
+            model = new DriveModel(spec);
+            demand = model.Step(new DriveInput { Handbrake = true, Throttle = 1.0 }, 10.0, 1.0 / 60.0);
+            Check(demand.RearGripFactor < 1.0, "the handbrake breaks rear traction");
+
+            // Steering: rate-limited, and tapered with speed.
+            model = new DriveModel(spec);
+            double afterOneStep = model.Step(new DriveInput { Steer = 1.0 }, 0.0, 1.0 / 60.0).SteerAngle;
+            Near(afterOneStep, spec.SteerRate / 60.0, 1e-12, "steering moves at its actuation rate");
+            for (int i = 0; i < 240; i++) model.Step(new DriveInput { Steer = 1.0 }, 0.0, 1.0 / 60.0);
+            Near(model.SteerAngle, spec.MaxSteer, 1e-9, "and reaches full lock at a standstill");
+
+            var fast = new DriveModel(spec);
+            for (int i = 0; i < 240; i++) fast.Step(new DriveInput { Steer = 1.0 }, spec.TopSpeed, 1.0 / 60.0);
+            Near(fast.SteerAngle, spec.MaxSteer * spec.HighSpeedSteerFactor, 1e-9,
+                 "at top speed the lock is tapered to its high-speed fraction");
+
+            // Air control is an angular acceleration, not a torque: doubling
+            // the mass must not change it. Getting this wrong detonates the
+            // solver, which is why it is checked rather than assumed.
+            model = new DriveModel(spec);
+            model.AirControlSpin(new DriveInput { Throttle = 1.0 }, true, 0.5, out double pitch, out _, out _);
+            Near(pitch, -spec.AirControl * 0.5, 1e-12, "throttle in the air pitches the nose up");
+            model.AirControlSpin(new DriveInput { Throttle = 1.0 }, false, 0.5, out double grounded, out _, out _);
+            Near(grounded, 0.0, 1e-12, "and does nothing with a wheel on the ground");
+
+            Near(model.DownforceAt(20.0, false), spec.Downforce * 400.0, 1e-9, "downforce goes with speed squared");
+            Near(model.DownforceAt(20.0, true), 0.0, 1e-12, "and is not generated in the air");
+
+            // The rescue timers: inverted *and* stationary, so a barrel roll
+            // mid-jump is not a rescue.
+            model = new DriveModel(spec);
+            model.UpdateRescueTimers(3.0, -1.0, 0.5, false);
+            Check(model.NeedsRescue, "a truck on its roof needs rescuing");
+            model = new DriveModel(spec);
+            model.UpdateRescueTimers(3.0, -1.0, 20.0, false);
+            Check(!model.NeedsRescue, "a truck rolling through the air does not");
+            model = new DriveModel(spec);
+            model.UpdateRescueTimers(3.0, 1.0, 0.0, true);
+            Near(model.StuckFor, 0.0, 1e-12, "a truck held on the grid is not stuck");
+        }
+
+        // ------------------------------------------------------------------
+        // The race director
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Drives two racers round a square loop by teleporting them from gate
+        /// to gate. No physics needed: what is being checked is the bookkeeping
+        /// — that gates must be taken in order, that laps and times land on the
+        /// right frame, and that the field is sorted by route rather than by
+        /// raw distance.
+        /// </summary>
+        private static void TheRaceDirectorCountsLapsAndPositions()
+        {
+            Section("the race director");
+            RoadPath road = SquareLoop();
+            var course = new RaceCourse(road);
+
+            Check(course.Checkpoints.Count >= 6, "a course always gets at least six gates");
+            Check(course.Spawns.Count == 12, "and a full grid");
+            Check(course.Spawns[0].Position.Y > RaceCourse.SpawnLift - 1e-9,
+                  "grid slots are lifted clear of the ground");
+
+            var race = new RaceDirector(course, totalLaps: 2);
+            Racer player = race.Add("player", "YOU", true);
+            Racer rival = race.Add("rival", "RIVAL", false);
+            foreach (Racer r in race.Racers)
+            {
+                r.Position = course.Checkpoints[0].Position;
+                r.Forward = course.Checkpoints[0].Forward;
+            }
+
+            Check(race.Locked, "the grid is held during the countdown");
+            race.Update(4.0);
+            Check(race.Phase == RacePhase.Racing, "and released when the countdown expires");
+
+            // Skipping straight to the last gate must not count as a lap: the
+            // sequence is what stops a truck cutting the infield.
+            player.Position = course.Checkpoints[course.Checkpoints.Count - 1].Position;
+            race.Update(1.0 / 60.0);
+            Check(player.Lap == 0, "jumping to the final gate does not count a lap");
+
+            DriveARacerRound(race, course, player, laps: 1);
+            Check(player.Lap == 1, "taking every gate in order counts a lap");
+            Check(player.LapTimes.Count == 1 && player.BestLap != null, "and records its time");
+            Check(player.PositionIndex == 1, "the racer on the longer route leads");
+            Check(rival.PositionIndex == 2, "and the one still on the line is second");
+
+            DriveARacerRound(race, course, player, laps: 1);
+            Check(player.Finished, "the last lap finishes the race");
+            Check(race.Phase == RacePhase.Finished, "and the player finishing ends it");
+            Check(rival.Finished && rival.FinishTime == null,
+                  "a racer still running is classified, not given a finish time");
+            Check(rival.PositionIndex == 2, "in the position they were running in");
+
+            // Wrong way: measured on travel, so reversing back down the road is
+            // not a wrong-way warning.
+            var second = new RaceDirector(course, 3);
+            Racer solo = second.Add("solo", "SOLO", true);
+            solo.Position = course.Checkpoints[0].Position;
+            second.Update(4.0);
+            solo.Forward = course.Checkpoints[0].Forward * -1.0;
+            solo.ForwardSpeed = 10.0;
+            second.Update(1.0 / 60.0);
+            Check(solo.WrongWay, "facing backwards and driving is the wrong way");
+            solo.ForwardSpeed = -10.0;
+            second.Update(1.0 / 60.0);
+            Check(!solo.WrongWay, "reversing back down the road is not");
+
+            Check(RaceDirector.FormatTime(null) == "--:--.--", "an unset time reads as dashes");
+            Check(RaceDirector.FormatTime(83.456) == "01:23.45", "times are mm:ss.hh");
+            Check(RaceDirector.Ordinal(1) == "1ST" && RaceDirector.Ordinal(2) == "2ND"
+                  && RaceDirector.Ordinal(3) == "3RD" && RaceDirector.Ordinal(4) == "4TH"
+                  && RaceDirector.Ordinal(11) == "11TH", "positions are ordinals");
+        }
+
+        /// <summary>Walk a racer through every gate, in order, for whole laps.</summary>
+        private static void DriveARacerRound(RaceDirector race, RaceCourse course, Racer racer, int laps)
+        {
+            for (int lap = 0; lap < laps; lap++)
+            {
+                for (int i = 0; i < course.Checkpoints.Count; i++)
+                {
+                    Checkpoint gate = course.Checkpoints[racer.NextCheckpoint];
+                    racer.Position = gate.Position;
+                    racer.Forward = gate.Forward;
+                    race.Update(1.0 / 60.0);
+                }
+            }
+        }
+
     }
 }

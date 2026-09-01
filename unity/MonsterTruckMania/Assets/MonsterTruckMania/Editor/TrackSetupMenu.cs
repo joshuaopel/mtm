@@ -3,7 +3,10 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 using MonsterTruckMania.Authoring;
+using MonsterTruckMania.Racing;
 using MonsterTruckMania.Rendering;
+using MonsterTruckMania.Simulation;
+using MonsterTruckMania.Vehicles;
 
 namespace MonsterTruckMania.EditorTools
 {
@@ -77,6 +80,84 @@ namespace MonsterTruckMania.EditorTools
             EditorUtility.SetDirty(retro);
 
             Debug.Log("[MTM] Retro camera attached. The game now renders at 240p and scales up.");
+        }
+
+        [MenuItem("Monster Truck Mania/Set Up Race In Scene", false, 2)]
+        public static void SetUpRace()
+        {
+            var track = Object.FindFirstObjectByType<TrackAuthoring>();
+            if (track == null)
+            {
+                EditorUtility.DisplayDialog(
+                    "No track in the scene",
+                    "Run Create Track In Scene first, so there is a course to race on.",
+                    "OK");
+                return;
+            }
+
+            Camera camera = Camera.main;
+            if (camera == null)
+            {
+                EditorUtility.DisplayDialog(
+                    "No main camera",
+                    "Tag a camera as MainCamera first, so the race has something to look through.",
+                    "OK");
+                return;
+            }
+
+            var chase = camera.GetComponent<ChaseCamera>();
+            if (chase == null) chase = Undo.AddComponent<ChaseCamera>(camera.gameObject);
+
+            var existing = Object.FindFirstObjectByType<RaceRunner>();
+            GameObject go = existing != null ? existing.gameObject : new GameObject("Race");
+            RaceRunner runner = existing != null ? existing : go.AddComponent<RaceRunner>();
+            if (go.GetComponent<RaceHud>() == null) go.AddComponent<RaceHud>();
+
+            runner.track = track;
+            runner.chaseCamera = chase;
+            runner.playerVehicle = EnsureVehicleAsset(StockVehicles.BoulderHog());
+            runner.opponentVehicles.Clear();
+            foreach (VehicleSpec spec in StockVehicles.All())
+            {
+                if (spec.Id == runner.playerVehicle.id) continue;
+                runner.opponentVehicles.Add(EnsureVehicleAsset(spec));
+            }
+
+            // The truck the runner spawns has no art on it, so a bare scene is
+            // driveable immediately. Assign a prefab to the runner when there
+            // is one to look at.
+            runner.truckPrefab = null;
+
+            if (existing == null) Undo.RegisterCreatedObjectUndo(go, "Set up race");
+            EditorUtility.SetDirty(runner);
+            Selection.activeGameObject = go;
+            AssetDatabase.SaveAssets();
+
+            Debug.Log("[MTM] Race set up: press Play. The trucks have no bodies yet — " +
+                      "assign a prefab with a TruckController to the runner when you model one.");
+        }
+
+        /// <summary>
+        /// Make an editable asset out of a stock truck, once.
+        /// </summary>
+        /// <remarks>
+        /// The roster lives in code so the offline tests can check it against
+        /// the web game's numbers, but tuning a truck by editing a C# literal
+        /// and waiting for a domain reload is miserable. This gives each one an
+        /// asset to edit, and leaves an existing one alone so your tuning is
+        /// not overwritten the next time you run the menu item.
+        /// </remarks>
+        private static VehicleAsset EnsureVehicleAsset(VehicleSpec spec)
+        {
+            Directory.CreateDirectory(AssetFolder);
+            string path = $"{AssetFolder}/{spec.Id}.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<VehicleAsset>(path);
+            if (existing != null) return existing;
+
+            VehicleAsset asset = ScriptableObject.CreateInstance<VehicleAsset>();
+            asset.CopyFrom(spec);
+            AssetDatabase.CreateAsset(asset, path);
+            return asset;
         }
 
         private static Material CreateMaterial(string shaderName, string fileName)

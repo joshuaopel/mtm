@@ -84,6 +84,9 @@ namespace MonsterTruckMania.Generation
         public static double Clamp(double value, double low, double high)
             => value < low ? low : value > high ? high : value;
 
+        /// <summary>Clamp to 0..1, which is most of what the driving code wants.</summary>
+        public static double Clamp01(double value) => Clamp(value, 0.0, 1.0);
+
         /// <summary>
         /// Ken Perlin's second smoothstep. Used for feature falloff, where the
         /// zero second derivative at each end is what stops a hill meeting the

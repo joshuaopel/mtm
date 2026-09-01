@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <Compile Include="../MonsterTruckMania/Assets/MonsterTruckMania/Runtime/Generation/**/*.cs" />
+    <Compile Include="../MonsterTruckMania/Assets/MonsterTruckMania/Runtime/Simulation/**/*.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
 
