@@ -44,9 +44,17 @@ namespace MonsterTruckMania.Authoring
         }
     }
 
-    /// <summary>One of the four terrain layers the ground shader blends.</summary>
+    /// <summary>
+    /// One of the four ground layers the terrain shader blends.
+    /// </summary>
+    /// <remarks>
+    /// Named GroundLayer rather than TerrainLayer on purpose: UnityEngine has
+    /// its own TerrainLayer for the built-in terrain system, and a same-named
+    /// type in a file with `using UnityEngine` is an ambiguity waiting to
+    /// happen the first time anyone writes the name unqualified.
+    /// </remarks>
     [Serializable]
-    public class TerrainLayer
+    public class GroundLayer
     {
         public string name = "dirt";
         public Texture2D texture;
@@ -98,12 +106,12 @@ namespace MonsterTruckMania.Authoring
         public List<SerializedFeature> features = new List<SerializedFeature>();
 
         [Header("Ground")]
-        public TerrainLayer[] layers = new TerrainLayer[4]
+        public GroundLayer[] layers = new GroundLayer[4]
         {
-            new TerrainLayer { name = "dirt", metresPerTile = 8f },
-            new TerrainLayer { name = "rock", metresPerTile = 12f },
-            new TerrainLayer { name = "grass", metresPerTile = 10f },
-            new TerrainLayer { name = "sand", metresPerTile = 9f },
+            new GroundLayer { name = "dirt", metresPerTile = 8f },
+            new GroundLayer { name = "rock", metresPerTile = 12f },
+            new GroundLayer { name = "grass", metresPerTile = 10f },
+            new GroundLayer { name = "sand", metresPerTile = 9f },
         };
 
         [Tooltip("Degrees of slope at which the second layer fully takes over. " +

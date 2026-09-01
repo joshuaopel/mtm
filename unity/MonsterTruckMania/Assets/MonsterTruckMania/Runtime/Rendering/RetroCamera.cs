@@ -124,8 +124,13 @@ namespace MonsterTruckMania.Rendering
                     : new GameObject("RetroPresent", typeof(Canvas), typeof(RawImage));
                 go.transform.SetParent(transform, false);
 
-                _canvas = go.GetComponent<Canvas>() ?? go.AddComponent<Canvas>();
-                _image = go.GetComponent<RawImage>() ?? go.AddComponent<RawImage>();
+                // Explicit rather than ??: Unity overloads == on Object, and
+                // relying on null-coalescing around it is the kind of thing
+                // that works until the object is destroyed rather than absent.
+                _canvas = go.GetComponent<Canvas>();
+                if (_canvas == null) _canvas = go.AddComponent<Canvas>();
+                _image = go.GetComponent<RawImage>();
+                if (_image == null) _image = go.AddComponent<RawImage>();
 
                 _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 // Above anything the game puts on screen, since this is the

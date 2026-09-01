@@ -47,14 +47,29 @@ Shader "Monster Truck Mania/Retro Blit"
                 half _Vignette;
             CBUFFER_END
 
-            struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
-            struct Varyings   { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+            // The vertex colour is here because this runs as the material on a
+            // RawImage: the Canvas feeds tint and, more importantly, the
+            // CanvasGroup alpha through it. Ignoring it means fades do nothing.
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float2 uv         : TEXCOORD0;
+                float4 color      : COLOR;
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float2 uv         : TEXCOORD0;
+                float4 color      : COLOR;
+            };
 
             Varyings vert (Attributes input)
             {
                 Varyings output;
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 output.uv = input.uv;
+                output.color = input.color;
                 return output;
             }
 
@@ -76,14 +91,18 @@ Shader "Monster Truck Mania/Retro Blit"
 
                 // Scanlines and vignette, both on the source grid so they
                 // scale with the chosen resolution rather than the window.
-                half line = 1.0h - _Scanline * (fmod(sourcePixel.y, 2.0) < 1.0 ? 0.0h : 1.0h);
-                color *= line;
+                //
+                // Not named `line`: that is a reserved primitive-type keyword
+                // in HLSL (geometry shader input) and using it as a variable
+                // fails to compile.
+                half scan = 1.0h - _Scanline * (fmod(sourcePixel.y, 2.0) < 1.0 ? 0.0h : 1.0h);
+                color *= scan;
 
                 float2 centred = input.uv - 0.5;
                 half vignette = 1.0h - saturate(dot(centred, centred) * 2.0) * _Vignette;
                 color *= vignette;
 
-                return half4(color, 1);
+                return half4(color * input.color.rgb, input.color.a);
             }
             ENDHLSL
         }

@@ -46,7 +46,9 @@ half3 QuantiseColour(half3 color, half levels)
 /// other half of the look: without it, quantisation alone just posterises.
 half BayerDither(float2 screenPosition)
 {
-    const half bayer[16] =
+    // static const, not const: a plain const local array indexed by a
+    // computed value is not portable across shader compilers.
+    static const half bayer[16] =
     {
          0.0h,  8.0h,  2.0h, 10.0h,
         12.0h,  4.0h, 14.0h,  6.0h,

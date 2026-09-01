@@ -22,10 +22,13 @@ namespace MonsterTruckMania.EditorTools
     [CustomEditor(typeof(TrackAuthoring))]
     public class TrackAuthoringEditor : Editor
     {
-        private enum Tool { None, Spline, Sculpt, Paint }
+        // Named EditTool, not Tool: UnityEditor already has a Tool enum, and
+        // a nested type with the same name silently shadows it inside this
+        // class while being ambiguous anywhere else.
+        private enum EditTool { None, Spline, Sculpt, Paint }
         private enum SculptMode { Raise, Lower, Smooth, Flatten }
 
-        private static Tool _tool = Tool.Spline;
+        private static EditTool _tool = EditTool.Spline;
         private static SculptMode _sculptMode = SculptMode.Raise;
         private static float _brushRadius = 30f;
         private static float _brushStrength = 1.5f;
@@ -61,9 +64,9 @@ namespace MonsterTruckMania.EditorTools
 
             switch (_tool)
             {
-                case Tool.Spline: DrawSplinePanel(authoring); break;
-                case Tool.Sculpt: DrawSculptPanel(authoring); break;
-                case Tool.Paint: DrawPaintPanel(authoring); break;
+                case EditTool.Spline: DrawSplinePanel(authoring); break;
+                case EditTool.Sculpt: DrawSculptPanel(authoring); break;
+                case EditTool.Paint: DrawPaintPanel(authoring); break;
             }
 
             if (!string.IsNullOrEmpty(authoring.LastWarning))
@@ -108,7 +111,7 @@ namespace MonsterTruckMania.EditorTools
 
         private static void DrawToolbar()
         {
-            _tool = (Tool)GUILayout.Toolbar((int)_tool,
+            _tool = (EditTool)GUILayout.Toolbar((int)_tool,
                 new[] { "Off", "Spline", "Sculpt", "Paint" }, GUILayout.Height(24));
         }
 
@@ -236,9 +239,9 @@ namespace MonsterTruckMania.EditorTools
 
             switch (_tool)
             {
-                case Tool.Spline: SplineHandles(authoring); break;
-                case Tool.Sculpt:
-                case Tool.Paint: BrushInteraction(authoring); break;
+                case EditTool.Spline: SplineHandles(authoring); break;
+                case EditTool.Sculpt:
+                case EditTool.Paint: BrushInteraction(authoring); break;
             }
         }
 
@@ -418,7 +421,7 @@ namespace MonsterTruckMania.EditorTools
             Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
             if (!RaycastField(authoring.Field, ray, out Vector3 hit)) return;
 
-            Handles.color = _tool == Tool.Sculpt
+            Handles.color = _tool == EditTool.Sculpt
                 ? new Color(0.4f, 1f, 0.5f, 0.9f)
                 : new Color(0.4f, 0.7f, 1f, 0.9f);
             Handles.DrawWireDisc(hit, Vector3.up, _brushRadius);
@@ -428,7 +431,7 @@ namespace MonsterTruckMania.EditorTools
                 && !e.alt)
             {
                 bool invert = e.control || e.command;
-                if (_tool == Tool.Sculpt) ApplySculpt(authoring, hit, invert);
+                if (_tool == EditTool.Sculpt) ApplySculpt(authoring, hit, invert);
                 else ApplyPaint(authoring, hit, invert);
                 e.Use();
             }
