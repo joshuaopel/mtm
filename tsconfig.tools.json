@@ -1,0 +1,27 @@
+{
+  // The build tooling: the Vite config and the content plugin it loads.
+  //
+  // Separate from the game's own program because these run in Node and need
+  // its globals, and pulling Node's types into `src` would let browser code
+  // reference APIs that are not there at runtime — `setTimeout` alone
+  // changes its return type and quietly stops being a number.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // Vite resolves the plugin source directly, so the config imports a .ts path.
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "tools/content-plugin.ts"]
+}

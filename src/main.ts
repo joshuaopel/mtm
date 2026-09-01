@@ -18,6 +18,7 @@ import {
   VehicleSelectScreen,
 } from './ui/screens';
 import type { Screen } from './ui/Screen';
+import { showErrorPanel } from './ui/ErrorPanel';
 import { TRACKS } from './data/tracks';
 import { VEHICLES } from './data/vehicles';
 import { loadContent } from './game/ContentLoader';
@@ -60,6 +61,8 @@ class Game {
   private opponents = 5;
 
   private lastFrame = performance.now();
+  /** Set once the loop has given up, so nothing schedules another frame. */
+  private stopped = false;
   private detail: DetailLevel = 'lo';
   /**
    * HUD size multiplier.
@@ -81,13 +84,25 @@ class Game {
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
-    // Browsers only allow audio to start from a user gesture.
+    // Browsers only allow audio to start from a user gesture. Listening
+    // once was wrong: if the first gesture cannot start the context — the
+    // tab is still in the background, or the device is out of audio
+    // contexts — the listener is gone and the game is silent for the rest
+    // of the session. Keep trying until one gesture works.
     const unlock = (): void => {
-      void this.audio.unlock();
+      this.audio.unlock().then(
+        () => {
+          window.removeEventListener('keydown', unlock);
+          window.removeEventListener('pointerdown', unlock);
+        },
+        (error: unknown) => console.warn('[audio] could not start audio yet', error),
+      );
       this.music.unlock();
     };
-    window.addEventListener('keydown', unlock, { once: true });
-    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('pointerdown', unlock);
+
+    this.watchGraphicsContext(canvas);
 
     this.showTitle();
     requestAnimationFrame(this.frame);
@@ -124,6 +139,39 @@ class Game {
     } catch (error) {
       console.warn('[content] custom content failed to load', error);
     }
+  }
+
+  /**
+   * A lost WebGL context.
+   *
+   * The GPU can take its context away at any time — a driver reset, a laptop
+   * waking from sleep, another tab being greedy — and the default browser
+   * behaviour is to leave every GL object dead while the page carries on
+   * calling into them. That renders as a frozen or black screen with a
+   * console full of three.js warnings and nothing else.
+   *
+   * Preventing the default on the loss event tells the browser we would like
+   * it back; if it comes back the cleanest thing to do is reload, because the
+   * scene's textures, buffers and render targets all died with the old
+   * context and rebuilding them piecemeal is how you get half-invisible
+   * geometry. Either way the player is told what happened.
+   */
+  private watchGraphicsContext(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault();
+      this.stopped = true;
+      console.warn('[renderer] the graphics context was lost');
+      showErrorPanel(this.uiRoot, {
+        title: 'GRAPHICS RESET',
+        message:
+          'The graphics driver took the display context back. Reload the page to carry on.',
+        action: { label: 'RELOAD', onSelect: () => window.location.reload() },
+      });
+    });
+
+    canvas.addEventListener('webglcontextrestored', () => {
+      console.info('[renderer] the graphics context came back');
+    });
   }
 
   /**
@@ -445,7 +493,21 @@ class Game {
   private async startRace(): Promise<void> {
     const loading = new LoadingScreen(this.selectedTrack.name);
     this.setScreen(loading, 'loading');
+    try {
+      await this.buildRace(loading);
+    } catch (error) {
+      // Anything that escapes the build — a model fetch that rejects, a
+      // track whose numbers make the generator throw — used to become an
+      // unhandled rejection and leave the player on a loading screen that
+      // never finished. Report it and give them the course list back.
+      console.error('[race] failed to start', error);
+      // Only if we are still on that loading screen: a failure after the
+      // race is up belongs to the frame loop's handler, not here.
+      if (this.screen === loading) loading.fail('COURSE FAILED TO LOAD', () => this.showTrackSelect());
+    }
+  }
 
+  private async buildRace(loading: LoadingScreen): Promise<void> {
     await nextFrame();
     this.disposeSession();
 
@@ -482,8 +544,8 @@ class Game {
         this.renderer.mirrorAspect,
       );
     } catch (error) {
-      console.error('failed to build race', error);
-      loading.setProgress(1, 'COURSE FAILED TO LOAD');
+      console.error('[race] failed to build the course', error);
+      loading.fail('COURSE FAILED TO LOAD', () => this.showTrackSelect());
       return;
     }
 
@@ -554,6 +616,19 @@ class Game {
   /* --- loop ------------------------------------------------------------ */
 
   private frame = (now: number): void => {
+    // One try/catch around the whole frame. Without it a single throw ends
+    // the requestAnimationFrame chain for good: the picture freezes, input
+    // stops, and the only sign anything happened is one line in a console
+    // nobody has open. Failing visibly is the whole point.
+    try {
+      this.step(now);
+    } catch (error) {
+      this.crash(error);
+    }
+  };
+
+  private step(now: number): void {
+    if (this.stopped) return;
     const frameTime = Math.min(0.25, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
 
@@ -581,7 +656,40 @@ class Game {
     }
 
     requestAnimationFrame(this.frame);
-  };
+  }
+
+  /**
+   * A frame threw.
+   *
+   * The simulation is the likely culprit and it is not safe to keep stepping
+   * it, so the session is torn down and the player is put back on the title
+   * screen with the loop still running. A second failure — one that happens
+   * with no race in flight — is the renderer or the shell itself, and there
+   * is nothing left to fall back to, so that one is fatal and says so.
+   */
+  private crash(error: unknown): void {
+    console.error('[game] a frame failed', error);
+
+    if (this.session) {
+      try {
+        this.disposeSession();
+        this.showTitle();
+        this.lastFrame = performance.now();
+        requestAnimationFrame(this.frame);
+        return;
+      } catch (cleanupError) {
+        console.error('[game] could not recover', cleanupError);
+      }
+    }
+
+    this.stopped = true;
+    showErrorPanel(this.uiRoot, {
+      title: 'THE GAME STOPPED',
+      message: 'Something went wrong while drawing a frame. Reload the page to start again.',
+      detail: error,
+      action: { label: 'RELOAD', onSelect: () => window.location.reload() },
+    });
+  }
 
   private updateRacing(frameTime: number): void {
     const session = this.session;
@@ -623,14 +731,83 @@ function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-const canvas = document.getElementById('view');
-const ui = document.getElementById('ui');
-if (!(canvas instanceof HTMLCanvasElement) || !ui) {
-  throw new Error('missing #view canvas or #ui container');
+/**
+ * Anything that escapes an event handler or a promise.
+ *
+ * These are logged rather than shown: most of them are recoverable, and a
+ * modal panel over a game that is still running would be worse than the bug.
+ * The failures worth interrupting a player for raise their own panel.
+ */
+function attachGlobalHandlers(): void {
+  window.addEventListener('error', (event) => {
+    console.error('[game] uncaught error', event.error ?? event.message);
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[game] unhandled promise rejection', event.reason);
+  });
 }
 
-// three r15x+ defaults to sRGB output; the retro pass expects linear values
-// so the dithering lands on the right colour steps.
-THREE.ColorManagement.enabled = true;
+/**
+ * Is WebGL 2 available at all?
+ *
+ * Asked on a throwaway canvas, never the one we render to: a canvas hands
+ * back the context it already made and ignores the attributes of any later
+ * request, so probing the real canvas would quietly discard the renderer's
+ * own `alpha: false` and `powerPreference: 'high-performance'` — and losing
+ * the latter is the difference between the discrete GPU and the integrated
+ * one on a laptop.
+ *
+ * Only consulted after startup has already failed, to tell "no 3D on this
+ * machine" — old hardware, hardware acceleration switched off, a remote
+ * desktop session — apart from a bug in our own code. Both are black pages
+ * otherwise, and only one of them is the player's to fix.
+ */
+function webglAvailable(): boolean {
+  try {
+    return document.createElement('canvas').getContext('webgl2') !== null;
+  } catch {
+    return false;
+  }
+}
 
-new Game(canvas, ui);
+function boot(): void {
+  attachGlobalHandlers();
+
+  const canvas = document.getElementById('view');
+  const ui = document.getElementById('ui');
+  if (!(canvas instanceof HTMLCanvasElement) || !(ui instanceof HTMLElement)) {
+    // The page itself is wrong, so there is nowhere trustworthy to draw a
+    // panel. This one stays a throw.
+    throw new Error('missing #view canvas or #ui container');
+  }
+
+  // three r15x+ defaults to sRGB output; the retro pass expects linear values
+  // so the dithering lands on the right colour steps.
+  THREE.ColorManagement.enabled = true;
+
+  try {
+    new Game(canvas, ui);
+  } catch (error) {
+    console.error('[game] failed to start', error);
+    if (!webglAvailable()) {
+      showErrorPanel(ui, {
+        title: 'NO 3D GRAPHICS',
+        // Worded for both places this runs: a browser tab and the desktop
+        // build, which is the same page inside Electron.
+        message:
+          'Could not open a WebGL 2 context, so the game cannot draw. In a browser, ' +
+          'check that hardware acceleration is switched on; otherwise update your ' +
+          'graphics driver.',
+      });
+      return;
+    }
+    showErrorPanel(ui, {
+      title: 'THE GAME DID NOT START',
+      message: 'Something failed while setting up. Reload the page to try again.',
+      detail: error,
+      action: { label: 'RELOAD', onSelect: () => window.location.reload() },
+    });
+  }
+}
+
+boot();

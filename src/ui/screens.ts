@@ -501,19 +501,50 @@ export class LoadingScreen implements Screen {
   readonly root: HTMLElement;
   private fill: HTMLElement;
   private label: HTMLElement;
+  private hint: HTMLElement;
+  /** Set by `fail`; while it is null the screen swallows input, as a loading
+   *  screen should — a keypress must not fall through to whatever is next. */
+  private onDismiss: (() => void) | null = null;
 
   constructor(title: string) {
     this.fill = el('div', { class: 'fill' });
     this.label = el('div', { text: 'PREPARING COURSE' });
+    this.hint = el('div', { class: 'hint' });
     this.root = el('div', { class: 'loading' }, [
       el('div', { text: title }),
       el('div', { class: 'track bevel-in' }, [this.fill]),
       this.label,
+      this.hint,
     ]);
   }
 
   setProgress(fraction: number, label?: string): void {
     this.fill.style.width = `${Math.round(fraction * 100)}%`;
     if (label) this.label.textContent = label;
+  }
+
+  /**
+   * Turn the progress bar into a failure report.
+   *
+   * Without this a course that will not build leaves the player watching a
+   * bar that never fills, with no key that does anything — the loading screen
+   * has no menu to back out of. Anything that can leave the game here has to
+   * offer a way out of it.
+   */
+  fail(reason: string, onDismiss: () => void): void {
+    this.fill.style.width = '100%';
+    this.label.className = 'failed';
+    this.label.textContent = reason;
+    this.hint.replaceChildren(el('b', { text: 'ENTER' }), document.createTextNode(' OR '), el('b', { text: 'ESC' }), document.createTextNode(' TO GO BACK'));
+    this.onDismiss = onDismiss;
+  }
+
+  handleInput(input: Input): void {
+    if (!this.onDismiss) return;
+    if (input.pressed('confirm') || input.pressed('back')) {
+      const dismiss = this.onDismiss;
+      this.onDismiss = null;
+      dismiss();
+    }
   }
 }

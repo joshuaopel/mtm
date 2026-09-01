@@ -99,6 +99,34 @@ function notFound(message) {
   return new Response(message, { status: 404, headers: { 'content-type': 'text/plain' } });
 }
 
+/**
+ * A readable failure, served over our own scheme.
+ *
+ * The alternative when something goes wrong before the game loads is the
+ * Electron default: a black window with no text in it, indistinguishable
+ * from a hang. This is deliberately plain HTML with no dependency on the
+ * bundle, since a missing bundle is one of the things it has to report.
+ */
+function errorPage(title, message) {
+  const escape = (text) =>
+    String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Monster Truck Mania</title>
+<style>
+  html,body{height:100%;margin:0;background:#14140f;color:#e8e4d0;
+    font-family:'Courier New',monospace;letter-spacing:1px}
+  div{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:16px;padding:32px;text-align:center}
+  h1{margin:0;color:#ffb020;font-size:26px;letter-spacing:5px;text-transform:uppercase}
+  p{margin:0;max-width:60ch;line-height:1.7}
+</style></head>
+<body><div><h1>${escape(title)}</h1><p>${escape(message)}</p></div></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: { 'content-type': 'text/html', 'cache-control': 'no-cache' },
+  });
+}
+
 async function fileResponse(absolute) {
   const body = await fsp.readFile(absolute);
   const type = MIME[path.extname(absolute).toLowerCase()] ?? 'application/octet-stream';
@@ -153,8 +181,29 @@ function safeJoin(root, relative) {
 }
 
 async function handle(request) {
+  try {
+    return await route(request);
+  } catch (error) {
+    // A throw here is a failed fetch in the page with no explanation
+    // anywhere. Log it and answer, so at least something is on screen.
+    console.error('[mtm] failed to serve', request.url, error);
+    return new Response(`internal error: ${error}`, {
+      status: 500,
+      headers: { 'content-type': 'text/plain' },
+    });
+  }
+}
+
+async function route(request) {
   const url = new URL(request.url);
   if (url.host !== HOST) return notFound('unknown host');
+
+  if (url.pathname === '/__error') {
+    return errorPage(
+      url.searchParams.get('title') ?? 'Something went wrong',
+      url.searchParams.get('message') ?? '',
+    );
+  }
 
   let relative = decodeURIComponent(url.pathname).replace(/^\/+/, '');
   if (relative === '') relative = 'index.html';
@@ -231,8 +280,46 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  /**
+   * Anything that stops the page loading.
+   *
+   * The usual cause is running the shell without building first, so `dist/`
+   * is not there — and the custom protocol answers the request either way,
+   * which turns "you forgot npm run build" into a black window. Say so.
+   */
+  win.webContents.on('did-fail-load', (_event, code, description, failedUrl, isMainFrame) => {
+    if (!isMainFrame) return;
+    console.error(`[mtm] could not load ${failedUrl}: ${description} (${code})`);
+    void win.loadURL(errorUrl('The game did not load', `${description} (${code})`));
+  });
+
+  // A renderer that dies takes the picture with it and leaves the window up.
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[mtm] the game process stopped: ${details.reason}`);
+    void win.loadURL(
+      errorUrl('The game stopped', `The game process ended unexpectedly (${details.reason}).`),
+    );
+  });
+
+  if (!fs.existsSync(path.join(BUNDLE, 'index.html'))) {
+    console.error(`[mtm] no build found at ${BUNDLE}`);
+    void win.loadURL(
+      errorUrl(
+        'No build found',
+        'The game has not been built yet. Run "npm run build" and start it again.',
+      ),
+    );
+    return win;
+  }
+
   void win.loadURL(`${SCHEME}://${HOST}/index.html`);
   return win;
+}
+
+/** URL of the built-in error page, with its text in the query string. */
+function errorUrl(title, message) {
+  const params = new URLSearchParams({ title, message });
+  return `${SCHEME}://${HOST}/__error?${params.toString()}`;
 }
 
 /**
@@ -265,14 +352,22 @@ if (!haveSingleInstanceLock()) {
     }
   });
 
-  void app.whenReady().then(() => {
-    protocol.handle(SCHEME, handle);
-    createWindow();
+  app
+    .whenReady()
+    .then(() => {
+      protocol.handle(SCHEME, handle);
+      createWindow();
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      });
+    })
+    .catch((error) => {
+      // Nothing has a window yet, so there is nowhere to draw a message —
+      // print it and exit non-zero rather than sitting there doing nothing.
+      console.error('[mtm] could not start:', error);
+      app.exit(1);
     });
-  });
 
   app.on('window-all-closed', () => app.quit());
 }
